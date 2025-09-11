@@ -11,7 +11,6 @@ import {
   FaGrinStars,
   FaExclamationTriangle,
   FaTrash,
-  FaEllipsisV,
 } from 'react-icons/fa';
 import { db } from '../firebase';
 import {
@@ -157,25 +156,6 @@ const DropdownButton = styled.button`
   padding: 4px;
 `;
 
-const DropdownMenu = styled.div`
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  position: absolute;
-  right: 1rem;
-  margin-top: 0.5rem;
-  z-index: 10;
-`;
-
-const DropdownItem = styled.div`
-  padding: 6px 12px;
-  cursor: pointer;
-
-  &:hover {
-    background: #eee;
-  }
-`;
-
 const LogDetails = styled.div`
   padding: 0.3rem 1rem 0.6rem;
   font-size: 0.85rem;
@@ -226,8 +206,19 @@ const Dashboard = () => {
   const [logs, setLogs] = useState([]);
   const [soldData, setSoldData] = useState([]);
   const [averageRating, setAverageRating] = useState(0);
-  const [showAllLogs, setShowAllLogs] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(null);
+  const [showAllLogs, setShowAllLogs] = useState(false); 
+
+  // Helper: Calculate total stock across all colors and sizes
+  const getTotalStock = (stock) => {
+    if (!stock) return 0;
+    let total = 0;
+    Object.values(stock).forEach(colorObj => {
+      Object.values(colorObj).forEach(qty => {
+        total += Number(qty) || 0;
+      });
+    });
+    return total;
+  };
 
   useEffect(() => {
     const fetchProductStats = async () => {
@@ -237,7 +228,8 @@ const Dashboard = () => {
         ...doc.data(),
       }));
 
-      const lowStocks = products.filter(prod => (Number(prod.stock) || 0) < 10);
+      // Low stock calculation with color & size
+      const lowStocks = products.filter(prod => getTotalStock(prod.stock) < 10);
       setLowStockItems(lowStocks);
 
       const totalSold = products.reduce((sum, prod) => sum + (Number(prod.sold) || 0), 0);
@@ -317,7 +309,7 @@ const Dashboard = () => {
             {lowStockItems.length > 0 ? (
               lowStockItems.map((item, i) => (
                 <LowStockItem key={i}>
-                  <FaExclamationTriangle /> {item.name} - {item.stock} left
+                  <FaExclamationTriangle /> {item.name} - {getTotalStock(item.stock)} left
                 </LowStockItem>
               ))
             ) : (

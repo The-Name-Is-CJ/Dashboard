@@ -11,8 +11,13 @@ import Profile from './frame/Profile';
 import Dashboard from './frame/Dashboard';
 import ChatSupport from './frame/ChatSupport';
 import Reviews from './frame/Reviews';
-import Orders from './frame/Orders';
 
+// Import your five order screens
+import Orders from './frame/Orders';
+import ToShip from './frame/ToShip';
+import ToReceive from './frame/ToReceive'; // ✅ Added
+import Cancelled from './frame/Cancelled';
+import Complete from './frame/Complete';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -48,9 +53,16 @@ function App() {
           <div style={{ marginLeft: '250px', padding: '20px', flex: 1 }}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" />} />
-              <Route path="/dashboard" element={<Dashboard/>} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/inventory" element={<Products />} />
-              <Route path="/orders" element={<Orders />} /> 
+
+              {/* Orders and its screens */}
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/orders/toship" element={<ToShip />} />
+              <Route path="/orders/toreceive" element={<ToReceive />} /> {/* ✅ Added */}
+              <Route path="/orders/cancelled" element={<Cancelled />} />
+              <Route path="/orders/complete" element={<Complete />} />
+
               <Route path="/chat" element={<ChatSupport />} />
               <Route path="/reviews" element={<Reviews />} />
               <Route path="/profile" element={<Profile />} />

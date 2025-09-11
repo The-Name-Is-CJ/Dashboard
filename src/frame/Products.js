@@ -16,10 +16,13 @@ import {
   ModalTitle,
   Label,
   Input,
-  ButtonGroup,
   SaveButton,
   CancelButton,
 } from '../components/dashboardstyles';
+
+// ✅ Fixed options
+const COLOR_OPTIONS = ['Black', 'White', 'Red', 'Yellow', 'Blue'];
+const SIZE_OPTIONS = ['S', 'M', 'L'];
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -31,7 +34,7 @@ const Products = () => {
     price: '',
     delivery: '',
     imageUrl: '',
-    stock: '',
+    stock: {}, // 
   });
   const [newProductCategory, setNewProductCategory] = useState({ main: '', sub: '' });
 
@@ -90,6 +93,34 @@ const Products = () => {
     return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
   };
 
+  const initializeFullStock = (currentStock = {}) => {
+  const stock = {};
+  COLOR_OPTIONS.forEach(color => {
+    stock[color] = {};
+    SIZE_OPTIONS.forEach(size => {
+      // Use existing value if available, otherwise 0
+      stock[color][size] = currentStock?.[color]?.[size] ?? 0;
+    });
+  });
+  return stock;
+  }; 
+    
+  const getColorsInStock = (stock) => {
+    if (!stock) return 'No stock';
+    return COLOR_OPTIONS
+      .filter(color =>
+        SIZE_OPTIONS.some(size => stock[color]?.[size] > 0)
+      ).join(', ') || 'No stock';
+  };
+
+const getSizesInStock = (stock) => {
+  if (!stock) return 'No stock';
+  return SIZE_OPTIONS
+    .filter(size =>
+      COLOR_OPTIONS.some(color => stock[color]?.[size] > 0)
+    ).join(', ') || 'No stock';
+};
+
   // Handle Add Product
   const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.price || !newProductCategory.main || !newProductCategory.sub) {
@@ -106,9 +137,11 @@ const Products = () => {
         imageUrl: newProduct.imageUrl || '',
         rating: 0,
         sold: 0,
-        stock: Number(newProduct.stock) || 0,
+        stock: initializeFullStock(newProduct.stock), // ✅ structured stock
         categoryMain: newProductCategory.main,
         categorySub: newProductCategory.sub,
+        colors: COLOR_OPTIONS,
+        sizes: SIZE_OPTIONS,
       });
 
       await addDoc(collection(db, 'recentActivityLogs'), {
@@ -120,7 +153,7 @@ const Products = () => {
 
       fetchProducts();
       setAddProduct(false);
-      setNewProduct({ name: '', price: '', delivery: '', imageUrl: '', stock: '' });
+      setNewProduct({ name: '', price: '', delivery: '', imageUrl: '', stock: initializeFullStock() });
       setNewProductCategory({ main: '', sub: '' });
     } catch (error) {
       console.error('Error adding product:', error);
@@ -143,9 +176,11 @@ const Products = () => {
         price: Number(editProduct.price),
         delivery: formatDelivery(editProduct.delivery),
         imageUrl: editProduct.imageUrl || '',
-        stock: Number(editProduct.stock) || 0,
+        stock: initializeFullStock(editProduct.stock),
         categoryMain: editProduct.categoryMain,
         categorySub: editProduct.categorySub,
+        colors: COLOR_OPTIONS,
+        sizes: SIZE_OPTIONS,
       });
 
       await addDoc(collection(db, 'recentActivityLogs'), {
@@ -186,7 +221,7 @@ const Products = () => {
     }
   };
 
-  // Modal click handler to close modals when clicking outside content
+  // Modal click handler
   const handleModalClick = e => {
     if (e.target.dataset.overlay === 'true') {
       setAddProduct(false);
@@ -226,11 +261,26 @@ const Products = () => {
           <p>₱{product.price}</p>
           <p>⭐ {product.rating}</p>
           <p>Sold: {formatNumber(product.sold)}</p>
-          <p>Stock: {product.stock ?? 0}</p>
           <p>Delivery: {product.delivery}</p>
+
+          {/* ✅ Stock Table */}
+          <div>
+            <Label>Colors</Label>
+            <p style={{ color: '#000', background: '#fff', padding: '4px', borderRadius: '4px' }}>
+              {getColorsInStock(product.stock)}
+            </p>
+
+            <Label>Sizes</Label>
+            <p style={{ color: '#000', background: '#fff', padding: '4px', borderRadius: '4px' }}>
+              {getSizesInStock(product.stock)}
+            </p>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.8rem' }}>
             <button
-              onClick={() => setEditProduct(product)}
+              onClick={() => {
+                setEditProduct(product);
+              }}
               style={editBtn}
             >
               Edit
@@ -266,280 +316,242 @@ const Products = () => {
       </div>
 
       {/* Add Product Modal */}
-      {addProduct && (
-        <ModalOverlay onClick={handleModalClick} data-overlay="true">
-          <ModalContent
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '80vw',
-              maxWidth: '1400px',
-              background: 'linear-gradient(135deg, #a166ff, #ebdfff)',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '2rem',
-              color: '#fff',
-              padding: '2rem',
-              borderRadius: '16px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              margin: 'auto',
-            }}
-          >
-            <div style={{ gridColumn: '1 / -1' }}>
-              <ModalTitle style={{ color: '#fff' }}>Add Product</ModalTitle>
-            </div>
+{addProduct && (
+  <ModalOverlay onClick={handleModalClick} data-overlay="true">
+    <ModalContent
+      onClick={e => e.stopPropagation()}
+      style={{
+        maxWidth: '90vw',      // landscape
+        width: '1200px',
+        maxHeight: '80vh',
+        overflowY: 'auto',     // scrollable
+        padding: '1.5rem',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '1.5rem',
+      }}
+    >
+      {/* left column: product info */}
+      <div>
+        <ModalTitle>Add Product</ModalTitle>
+        <Label>Name</Label>
+        <Input value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+        <Label>Price</Label>
+        <Input type="number" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
+        <Label>Delivery</Label>
+        <Input value={newProduct.delivery} onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
+        <Label>Image URL</Label>
+        <Input value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
+      </div>
 
-            <div>
-              <Label>Name</Label>
-              <Input
-                value={newProduct.name}
-                onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Price</Label>
-              <Input
-                type="number"
-                value={newProduct.price}
-                onChange={e => setNewProduct({ ...newProduct, price: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Delivery</Label>
-              <Input
-                value={newProduct.delivery}
-                onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Image URL</Label>
-              <Input
-                value={newProduct.imageUrl}
-                onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Stock</Label>
-              <Input
-                type="number"
-                value={newProduct.stock}
-                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
-              />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <Label>Main Category</Label>
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
-                {['Top', 'Bottom'].map(cat => (
-                  <label key={cat} style={{ cursor: 'pointer' }}>
+      {/* right column: stock table */}
+      <div>
+        <Label>Stock</Label>
+        <Label style={{ color: '#000' }}>Stock</Label>
+          <table border="1" style={{ marginTop: '5px', borderCollapse: 'collapse', width: '100%', background: '#fff', color: '#000' }}>
+            <thead>
+              <tr>
+                <th>Color</th>
+                {SIZE_OPTIONS.map(size => (
+                  <th key={size}>{size}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {COLOR_OPTIONS.map(color => (
+                <tr key={color}>
+                  <td>{color}</td>
+                  {SIZE_OPTIONS.map(size => (
+                    <td key={size}>
+                      <input
+                        type="number"
+                        value={newProduct.stock?.[color]?.[size] ?? 0}
+                        onChange={e => {
+                          const updated = { ...newProduct.stock };
+                          if (!updated[color]) updated[color] = {};
+                          updated[color][size] = Number(e.target.value);
+                          setNewProduct({ ...newProduct, stock: updated });
+                        }}
+                        style={{ width: '60px' }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+        {/* Category Selection */}
+          <div style={{ marginTop: '1rem' }}>
+            <Label style={{ color: '#000' }}>Main Category</Label>
+            {['Top', 'Bottom'].map(main => (
+              <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
+                <input
+                  type="radio"
+                  name="mainCategory"
+                  value={main}
+                  checked={newProductCategory.main === main}
+                  onChange={() => setNewProductCategory({ ...newProductCategory, main: main, sub: '' })}
+                />
+                {main.toUpperCase()}
+              </label>
+            ))}
+
+            {newProductCategory.main && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <Label style={{ color: '#000' }}>Sub Category</Label>
+                {subCategoryMap[newProductCategory.main].map(sub => (
+                  <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
                     <input
                       type="radio"
-                      name="mainCategory"
-                      value={cat}
-                      checked={newProductCategory.main === cat}
-                      onChange={e => setNewProductCategory({ main: e.target.value, sub: '' })}
-                      style={{ marginRight: '0.5rem' }}
+                      name="subCategory"
+                      value={sub}
+                      checked={newProductCategory.sub === sub}
+                      onChange={() => setNewProductCategory({ ...newProductCategory, sub })}
                     />
-                    {cat}
+                    {sub}
                   </label>
                 ))}
               </div>
-            </div>
-
-            {/* Only show subcategory if main is selected */}
-            {newProductCategory.main && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label>Subcategory</Label>
-                <div style={{ display: 'flex', gap: '1.5rem' }}>
-                  {subCategoryMap[newProductCategory.main].map(sub => (
-                    <label key={sub} style={{ cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="subCategory"
-                        value={sub}
-                        checked={newProductCategory.sub === sub}
-                        onChange={e => setNewProductCategory({ ...newProductCategory, sub: e.target.value })}
-                        style={{ marginRight: '0.5rem' }}
-                      />
-                      {sub}
-                    </label>
-                  ))}
-                </div>
-              </div>
             )}
+          </div>
 
-            <div
-              style={{
-                gridColumn: '1 / -1',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                marginTop: '2rem',
-                gap: '1rem',
-              }}
-            >
-              <ButtonGroup>
-                <SaveButton onClick={handleAddProduct}>Add</SaveButton>
-                <CancelButton
-                  onClick={() => {
-                    setAddProduct(false);
-                    setNewProductCategory({ main: '', sub: '' });
-                    setNewProduct({ name: '', price: '', delivery: '', imageUrl: '', stock: '' });
-                  }}
-                >
-                  Cancel
-                </CancelButton>
-              </ButtonGroup>
-            </div>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+      </div>
+
+      {/* footer buttons */}
+      <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+        <SaveButton onClick={handleAddProduct}>Add</SaveButton>
+        <CancelButton onClick={() => setAddProduct(false)}>Cancel</CancelButton>
+      </div>
+    </ModalContent>
+  </ModalOverlay>
+)}
+
 
       {/* Edit Product Modal */}
       {editProduct && (
-        <ModalOverlay onClick={handleModalClick} data-overlay="true">
-          <ModalContent
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: '80vw',
-              maxWidth: '1400px',
-              background: 'linear-gradient(135deg, #a166ff, #ebdfff)',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '2rem',
-              color: '#fff',
-              padding: '2rem',
-              borderRadius: '16px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              margin: 'auto',
-            }}
-          >
-            <div style={{ gridColumn: '1 / -1' }}>
-              <ModalTitle style={{ color: '#fff' }}>Edit Product</ModalTitle>
-            </div>
+  <ModalOverlay onClick={handleModalClick} data-overlay="true">
+    <ModalContent
+      onClick={e => e.stopPropagation()}
+      style={{
+        maxWidth: '90vw',      // almost full width
+        width: '1200px',       // fixed wide width
+        maxHeight: '80vh',     // max height to fit screen
+        overflowY: 'auto',     // allow vertical scrolling
+        padding: '1.5rem',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr', // two-column layout
+        gap: '1.5rem',
+      }}
+    >
+      {/* left column: product info */}
+      <div>
+        <ModalTitle>Edit Product</ModalTitle>
+        <Label>Product ID</Label>
+        <Input value={editProduct.productID || ''} readOnly />
+        <Label>Name</Label>
+        <Input value={editProduct.name} onChange={e => setEditProduct({ ...editProduct, name: e.target.value })} />
+        <Label>Price</Label>
+        <Input type="number" value={editProduct.price} onChange={e => setEditProduct({ ...editProduct, price: e.target.value })} />
+        <Label>Delivery</Label>
+        <Input value={editProduct.delivery} onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })} />
+        <Label>Image URL</Label>
+        <Input value={editProduct.imageUrl} onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })} />
+      </div>
 
-            <div>
-              <Label>Product ID</Label>
-              <Input value={editProduct.productID || ''} readOnly />
-            </div>
-            <div>
-              <Label>Name</Label>
-              <Input
-                value={editProduct.name}
-                onChange={e => setEditProduct({ ...editProduct, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Price</Label>
-              <Input
-                type="number"
-                value={editProduct.price}
-                onChange={e => setEditProduct({ ...editProduct, price: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Delivery</Label>
-              <Input
-                value={editProduct.delivery}
-                onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Image URL</Label>
-              <Input
-                value={editProduct.imageUrl}
-                onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Stock</Label>
-              <Input
-                type="number"
-                value={editProduct.stock}
-                onChange={e => setEditProduct({ ...editProduct, stock: e.target.value })}
-              />
-            </div>
+      {/* right column: stock table */}
+      <div>
+        <Label>Stock</Label>
+        <table border="1" style={{ marginTop: '5px', borderCollapse: 'collapse', width: '100%', background: '#fff', color: '#000' }}>
+          <thead>
+            <tr>
+              <th>Color</th>
+              {SIZE_OPTIONS.map(size => (
+                <th key={size}>{size}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {COLOR_OPTIONS.map(color => (
+              <tr key={color}>
+                <td>{color}</td>
+                {SIZE_OPTIONS.map(size => (
+                  <td key={size}>
+                    <input
+                      type="number"
+                      value={editProduct.stock?.[color]?.[size] ?? 0}
+                      onChange={e => {
+                        const updated = { ...editProduct.stock };
+                        if (!updated[color]) updated[color] = {};
+                        updated[color][size] = Number(e.target.value);
+                        setEditProduct({ ...editProduct, stock: updated });
+                      }}
+                      style={{ width: '60px' }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
 
-            <div style={{ gridColumn: '1 / -1' }}>
-              <Label>Main Category</Label>
-              <div style={{ display: 'flex', gap: '1.5rem' }}>
-                {['Top', 'Bottom'].map(cat => (
-                  <label key={cat} style={{ cursor: 'pointer' }}>
+        {/* Category Selection */}
+          <div style={{ marginTop: '1rem' }}>
+            <Label style={{ color: '#000' }}>Main Category</Label>
+            {['Top', 'Bottom'].map(main => (
+              <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
+                <input
+                  type="radio"
+                  name="mainCategoryEdit"
+                  value={main}
+                  checked={editProduct.categoryMain === main}
+                  onChange={() => setEditProduct({ ...editProduct, categoryMain: main, categorySub: '' })}
+                />
+                {main.toUpperCase()}
+              </label>
+            ))}
+
+            {editProduct.categoryMain && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <Label style={{ color: '#000' }}>Sub Category</Label>
+                {subCategoryMap[editProduct.categoryMain].map(sub => (
+                  <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
                     <input
                       type="radio"
-                      name="editMainCategory"
-                      value={cat}
-                      checked={editProduct.categoryMain === cat}
-                      onChange={e =>
-                        setEditProduct({
-                          ...editProduct,
-                          categoryMain: e.target.value,
-                          categorySub: '',
-                        })
-                      }
-                      style={{ marginRight: '0.5rem' }}
+                      name="subCategoryEdit"
+                      value={sub}
+                      checked={editProduct.categorySub === sub}
+                      onChange={() => setEditProduct({ ...editProduct, categorySub: sub })}
                     />
-                    {cat}
+                    {sub}
                   </label>
                 ))}
               </div>
-            </div>
-
-            {/* Show subcategory only if main selected */}
-            {editProduct.categoryMain && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <Label>Subcategory</Label>
-                <div style={{ display: 'flex', gap: '1.5rem' }}>
-                  {subCategoryMap[editProduct.categoryMain].map(sub => (
-                    <label key={sub} style={{ cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="editSubCategory"
-                        value={sub}
-                        checked={editProduct.categorySub === sub}
-                        onChange={e =>
-                          setEditProduct({ ...editProduct, categorySub: e.target.value })
-                        }
-                        style={{ marginRight: '0.5rem' }}
-                      />
-                      {sub}
-                    </label>
-                  ))}
-                </div>
-              </div>
             )}
+          </div>
 
-            <div
-              style={{
-                gridColumn: '1 / -1',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                marginTop: '2rem',
-                gap: '1rem',
-              }}
-            >
-              <ButtonGroup>
-                <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
-                <CancelButton onClick={() => setEditProduct(null)}>Cancel</CancelButton>
-              </ButtonGroup>
-            </div>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+      </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* footer buttons spanning both columns */}
+      <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+        <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
+        <CancelButton onClick={() => setEditProduct(null)}>Cancel</CancelButton>
+      </div>
+    </ModalContent>
+  </ModalOverlay>
+)}
+
+
+      {/* Delete Confirmation */}
       {deleteConfirm.show && (
         <ModalOverlay onClick={handleModalClick} data-overlay="true">
           <ModalContent onClick={e => e.stopPropagation()}>
             <ModalTitle>Confirm Delete</ModalTitle>
-            <p>Are you sure you want to delete this item?</p>
-            <ButtonGroup>
-              <CancelButton onClick={() => setDeleteConfirm({ show: false, id: null })}>
-                Cancel
-              </CancelButton>
-              <SaveButton onClick={confirmDelete} style={{ backgroundColor: '#A94444' }}>
-                Delete
-              </SaveButton>
-            </ButtonGroup>
+            <p>Are you sure you want to delete {productToDelete?.name}?</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+              <SaveButton onClick={confirmDelete}>Yes</SaveButton>
+              <CancelButton onClick={() => setDeleteConfirm({ show: false, id: null })}>Cancel</CancelButton>
+            </div>
           </ModalContent>
         </ModalOverlay>
       )}
@@ -548,27 +560,19 @@ const Products = () => {
 };
 
 const editBtn = {
-  padding: '12px 20px',
-  width: '100px',
-  color: '#fff',
-  border: 'none',
+  background: '#fff',
+  color: '#000',
+  padding: '0.5rem 1rem',
   borderRadius: '8px',
   cursor: 'pointer',
-  fontSize: '1rem',
-  fontWeight: '600',
-  backgroundColor: 'rgba(10, 21, 227, 1)',
 };
 
 const deleteBtn = {
-  backgroundColor: '#e20f0fff',
-  padding: '12px 20px',
-  width: '100px',
-  color: '#fff',
-  border: 'none',
+  background: '#ccc',
+  color: '#000',
+  padding: '0.5rem 1rem',
   borderRadius: '8px',
   cursor: 'pointer',
-  fontSize: '1rem',
-  fontWeight: '600',
 };
 
 export default Products;

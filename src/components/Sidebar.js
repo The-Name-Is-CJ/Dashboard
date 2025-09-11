@@ -61,7 +61,7 @@ const Sidebar = () => {
       </NavItem>
 
       <NavItem to="/inventory">
-        <FaBoxes /> Inventory
+        <FaBoxes /> Product List
       </NavItem>
 
       <NavItem to="/orders">
