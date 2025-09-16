@@ -91,17 +91,38 @@ const ToShip = () => {
   }, []);
 
   const handleConfirmYes = async (order, item) => {
-    try {
-      // ✅ Step 1: Directly add to "toReceive"
-      await addDoc(collection(db, 'toReceive'), {
+    try { 
+      const toReceiveRef = await addDoc(collection(db, 'toReceive'), {
         ...order,
         items: [item],
         status: "To Receive",
-        receivedAt: new Date(), // the time admin marked it
+        receivedAt: new Date(), 
       });
 
-      // ✅ Step 2: Remove from "toShip"
       await deleteDoc(doc(db, 'toShip', order.id));
+
+      // 🔔 Add notifications
+      const notificationsRef = collection(db, "notifications");
+
+      // 1️⃣ Order shipped notification
+      await addDoc(notificationsRef, {
+        userId: order.userId,
+        title: "Order Shipped",
+        message: `Your order for ${item.productName} has been shipped.`,
+        orderId: toReceiveRef.id,
+        timestamp: new Date(),
+        read: false,
+      });
+
+      // 2️⃣ Order ready to receive notification
+      await addDoc(notificationsRef, {
+        userId: order.userId,
+        title: "Order Ready to Receive",
+        message: `Your order for ${item.productName} is now ready to receive.`,
+        orderId: toReceiveRef.id,
+        timestamp: new Date(),
+        read: false,
+      });
 
       setConfirmOrder(null);
       console.log(`Order ${order.id} moved to "toReceive"`);
