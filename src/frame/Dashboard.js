@@ -208,17 +208,20 @@ const Dashboard = () => {
   const [averageRating, setAverageRating] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false); 
 
-  // Helper: Calculate total stock across all colors and sizes
   const getTotalStock = (stock) => {
-    if (!stock) return 0;
-    let total = 0;
-    Object.values(stock).forEach(colorObj => {
-      Object.values(colorObj).forEach(qty => {
-        total += Number(qty) || 0;
-      });
-    });
-    return total;
-  };
+  if (!stock) return 0;
+
+  // If your Firestore data already has totalStock saved, just use it directly
+  if (stock.totalStock !== undefined) return Number(stock.totalStock) || 0;
+
+  // Otherwise, sum all sizes manually
+  let total = 0;
+  Object.entries(stock).forEach(([size, qty]) => {
+    if (typeof qty === 'number') total += qty;
+  });
+
+  return total;
+}
 
   useEffect(() => {
     const fetchProductStats = async () => {
@@ -229,7 +232,7 @@ const Dashboard = () => {
       }));
 
       // Low stock calculation with color & size
-      const lowStocks = products.filter(prod => getTotalStock(prod.stock) < 10);
+      const lowStocks = products.filter(prod => getTotalStock(prod.stock) <= 10);
       setLowStockItems(lowStocks);
 
       const totalSold = products.reduce((sum, prod) => sum + (Number(prod.sold) || 0), 0);
