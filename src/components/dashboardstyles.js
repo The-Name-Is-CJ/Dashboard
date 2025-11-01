@@ -2,7 +2,7 @@ import styled from "styled-components";
 
 export const Colors = {
   primary: "#EDEDED",
-  secondary: "#5C427E",
+  secondary: "#a166ff",
   white: "#FFFFFF",
   black: "#000000",
   gray: "#717171",
@@ -35,12 +35,13 @@ export const ModalContent = styled.div`
 
 export const ModalTitle = styled.h2`
   font-size: 1.75rem;
-  color: ${black};
+  color: ${secondary};
   margin-bottom: 1.5rem;
+  font-family: 'Krona One', sans-serif;
 `;
 
 export const Label = styled.label`
-  color: ${gray};
+  color: ${black};
   font-size: 1rem;
   display: block;
   margin-top: 0.75rem;
@@ -48,17 +49,22 @@ export const Label = styled.label`
 `;
 
 export const Input = styled.input`
-  width: 100%;
-  padding: 14px 18px;
+  width: 90%;
+  padding: 10px 18px;
   border-radius: 10px;
   border: 1px solid ${gray};
-  background-color: ${primary};
-  font-size: 1rem;
-  margin-bottom: 1rem;
+  background-color: ${white};
+  font-size: 0.9rem;
+  margin-bottom: 10px;
   color: ${black};
   text-indent: 0;      
   text-align: left;     
   box-sizing: border-box;
+
+   &:focus {
+    outline: none;
+    border-color: ${Colors.secondary}; // purple border
+    box-shadow: 0 0 4px ${Colors.secondary};
 `;
 
 
@@ -69,7 +75,7 @@ export const ButtonGroup = styled.div`
 `;
 
 export const SaveButton = styled.button`
-  padding: 14px 24px;
+  padding: 14px 60px;
   background-color: ${secondary};
   color: ${white};
   font-size: 1rem;
@@ -83,7 +89,7 @@ export const SaveButton = styled.button`
 `;
 
 export const CancelButton = styled.button`
-  padding: 14px 24px;
+  padding: 14px 60px;
   margin-left: 12px;
   background-color: ${gray};
   color: ${white};
@@ -100,16 +106,20 @@ export const CancelButton = styled.button`
 // ✅ Added these new styles
 export const TableWrapper = styled.div`
   overflow-x: auto;
-  width: 100%;
+  width: 200%;
   margin-top: 1rem;
 `;
 
 export const StyledTable = styled.table`
   width: 100%;
-  min-width: 1000px;
+  min-width: 1200px;
   border-collapse: collapse;
 
-  th, td {
+  tbody {
+    font-size: 1px;
+  }
+
+  th {
     text-align: left;
     padding: 12px 16px;
     border: 1px solid ${gray};
@@ -131,7 +141,7 @@ export const StyledTable = styled.table`
     color: ${white};
 
     &:hover {
-      background-color: #462e6c;
+      background-color: #735d97ff;
     }
   }
 `;

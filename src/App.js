@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import './App.css';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
 import DashLogin from './frame/DashLogin';
@@ -12,10 +13,10 @@ import Dashboard from './frame/Dashboard';
 import ChatSupport from './frame/ChatSupport';
 import Reviews from './frame/Reviews';
 
-// Import your five order screens
+// Orders Pages
 import Orders from './frame/Orders';
 import ToShip from './frame/ToShip';
-import ToReceive from './frame/ToReceive'; // ✅ Added
+import ToReceive from './frame/ToReceive';
 import Cancelled from './frame/Cancelled';
 import Complete from './frame/Complete';
 
@@ -59,7 +60,7 @@ function App() {
               {/* Orders and its screens */}
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/toship" element={<ToShip />} />
-              <Route path="/orders/toreceive" element={<ToReceive />} /> {/* ✅ Added */}
+              <Route path="/orders/toreceive" element={<ToReceive />} />
               <Route path="/orders/cancelled" element={<Cancelled />} />
               <Route path="/orders/complete" element={<Complete />} />
 

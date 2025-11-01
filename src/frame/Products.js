@@ -35,10 +35,7 @@ const Products = () => {
     arUrl: '',
     stock: { S: 0, M: 0, L: 0, XL: 0 },
   });
-  const [newProductCategory, setNewProductCategory] = useState({
-  main: '',  
-  sub: '' 
-});
+  const [newProductCategory, setNewProductCategory] = useState({ main: '', sub: '' });
 
   // Edit product modal
   const [editProduct, setEditProduct] = useState(null);
@@ -111,7 +108,7 @@ const Products = () => {
       .join(', ') || 'No stock';
   };
 
- const handleAddProduct = async () => {
+  const handleAddProduct = async () => {
     if (
       !newProduct.name ||
       !newProduct.price ||
@@ -123,10 +120,9 @@ const Products = () => {
     }
 
     try {
-      const newProductID = generateNextProductID(); 
+      const newProductID = generateNextProductID();
       const stockData = initializeFullStock(newProduct.stock);
       const totalStock = Object.values(stockData).reduce((sum, val) => sum + val, 0);
-
 
       await addDoc(collection(db, 'products'), {
         productID: newProductID,
@@ -151,7 +147,6 @@ const Products = () => {
         timestamp: serverTimestamp(),
       });
 
-      // ✅ Refresh and reset
       fetchProducts();
       setAddProduct(false);
       setNewProduct({
@@ -170,49 +165,44 @@ const Products = () => {
   };
 
   const handleSaveEdit = async () => {
-  if (!editProduct.name || !editProduct.price || !editProduct.categoryMain || !editProduct.categorySub) {
-    alert('Please fill in all required fields.');
-    return;
-  }
+    if (!editProduct.name || !editProduct.price || !editProduct.categoryMain || !editProduct.categorySub) {
+      alert('Please fill in all required fields.');
+      return;
+    }
 
-  try {
-    const productRef = doc(db, 'products', editProduct.id);
+    try {
+      const productRef = doc(db, 'products', editProduct.id);
+      const updatedStock = initializeFullStock(editProduct.stock);
+      const totalStock = Object.values(updatedStock).reduce((sum, val) => sum + val, 0);
 
-    // ✅ Initialize stock properly like in Add
-    const updatedStock = initializeFullStock(editProduct.stock);
+      await updateDoc(productRef, {
+        name: editProduct.name,
+        price: Number(editProduct.price),
+        delivery: formatDelivery(editProduct.delivery),
+        imageUrl: editProduct.imageUrl || '',
+        arUrl: editProduct.arUrl || '',
+        stock: updatedStock,
+        totalStock: totalStock,
+        categoryMain: editProduct.categoryMain,
+        categorySub: editProduct.categorySub,
+        sizes: SIZE_OPTIONS,
+      });
 
-    // ✅ Compute total stock
-    const totalStock = Object.values(updatedStock).reduce((sum, val) => sum + val, 0);
+      await addDoc(collection(db, 'recentActivityLogs'), {
+        action: 'edited product',
+        productId: editProduct.id,
+        productName: editProduct.name,
+        timestamp: serverTimestamp(),
+      });
 
-    await updateDoc(productRef, {
-      name: editProduct.name,
-      price: Number(editProduct.price),
-      delivery: formatDelivery(editProduct.delivery),
-      imageUrl: editProduct.imageUrl || '',
-      arUrl: editProduct.arUrl || '',
-      stock: updatedStock,
-      totalStock: totalStock, // ✅ Added totalStock
-      categoryMain: editProduct.categoryMain,
-      categorySub: editProduct.categorySub,
-      sizes: SIZE_OPTIONS,
-    });
+      fetchProducts();
+      setEditProduct(null);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      alert('Failed to update product.');
+    }
+  };
 
-    await addDoc(collection(db, 'recentActivityLogs'), {
-      action: 'edited product',
-      productId: editProduct.id,
-      productName: editProduct.name,
-      timestamp: serverTimestamp(),
-    });
-
-    fetchProducts();
-    setEditProduct(null);
-  } catch (error) {
-    console.error('Error updating product:', error);
-    alert('Failed to update product.');
-  }
-};
-
-  // Confirm Delete
   const confirmDelete = async () => {
     try {
       await deleteDoc(doc(db, 'products', deleteConfirm.id));
@@ -235,7 +225,6 @@ const Products = () => {
     }
   };
 
-  // Modal click handler
   const handleModalClick = e => {
     if (e.target.dataset.overlay === 'true') {
       setAddProduct(false);
@@ -247,492 +236,441 @@ const Products = () => {
   };
 
   return (
-    <div
-      style={{
-        padding: '2rem',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '1.5rem',
-        color: '#fff',
-      }}
-    >
-      {products.map(product => (
-        <div
-          key={product.id}
-          style={{
-            background: 'linear-gradient(135deg, #a166ff, #ebdfff)',
-            borderRadius: '12px',
-            padding: '1rem',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          }}
-        >
-         <img
-            src={product.imageUrl || '/asset/icon.png'}
-            alt={product.name}
-            style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '8px' }}  />
+    <>
+      <style>{`
+        .product-grid {
+          padding: 2rem;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1.5rem;
+          color: #fff;
+        }
+        .product-card {
+          background: linear-gradient(135deg, #a166ff, #ebdfff);
+          border-radius: 12px;
+          padding: 1rem;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .product-card img {
+          width: 100%;
+          height: 160px;
+          object-fit: cover;
+          border-radius: 8px;
+        }
+        .sizes-pill {
+          color: #000;
+          background: #fff;
+          padding: 4px;
+          border-radius: 4px;
+          display: inline-block;
+          width: 100%;
+        }
+        .actions-row {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 0.8rem;
+        }
+        .edit-button {
+          background-color: #4CAF50;;
+          color: #fff;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          cursor: pointer;
+          border: none;
+          width: 45%;
+        }
+        .edit-button:hover {
+          transform: translateY(-2px);
+        }
+        .delete-button {
+          background: #ff4d4d;
+          color: #fff;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          cursor: pointer;
+          border: none;
+          width: 45%;
+        }
+        .delete-button:hover {
+          transform: translateY(-2px);
+        }
+        .add-card {
+          border: 2px dashed #ccc;
+          border-radius: 12px;
+          height: 350px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.2rem;
+          cursor: pointer;
+          color: #555;
+        }
+      `}</style>
 
-          <h3>{product.productID ? `${product.productID} - ${product.name}` : product.name}</h3>
-          <p>₱{product.price}</p>
-          <p>⭐ {product.rating}</p>
-          <p>Sold: {formatNumber(product.sold)}</p>
-          <p>Delivery: {product.delivery}</p>
+      <div className="product-grid">
+        {products.map(product => (
+          <div key={product.id} className="product-card">
+            <img src={product.imageUrl || '/asset/icon.png'} alt={product.name} />
 
-          {/* ✅ Stock Table */}
-          <div>
-            
-            <Label>Sizes</Label>
-            <p style={{ color: '#000', background: '#fff', padding: '4px', borderRadius: '4px' }}>
-              {getSizesInStock(product.stock)}
-            </p>
+            <h3>{product.productID ? `${product.productID} - ${product.name}` : product.name}</h3>
+            <p>₱{product.price}</p>
+            <p>⭐ {product.rating}</p>
+            <p>Sold: {formatNumber(product.sold)}</p>
+            <p>Delivery: {product.delivery}</p>
+
+            <div>
+              <Label>Sizes</Label>
+              <p className="sizes-pill">{getSizesInStock(product.stock)}</p>
+            </div>
+
+            <div className="actions-row">
+              <button
+                onClick={() => setEditProduct(product)}
+                className="edit-button"
+              >
+                Edit
+              </button>
+
+              <button
+                onClick={() => {
+                  setProductToDelete(product);
+                  setDeleteConfirm({ show: true, id: product.id });
+                }}
+                className="delete-button"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.8rem' }}>
-            <button
-              onClick={() => {
-                setEditProduct(product);
-              }}
-              style={editBtn}
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => {
-                setProductToDelete(product);
-                setDeleteConfirm({ show: true, id: product.id });
-              }}
-              style={deleteBtn}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      ))}
-
-      <div
-        onClick={() => setAddProduct(true)}
-        style={{
-          border: '2px dashed #ccc',
-          borderRadius: '12px',
-          height: '350px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.2rem',
-          cursor: 'pointer',
-          color: '#555',
-        }}
-      >
-        + Add Product
-      </div>
-
-      {/* Add Product Modal */}
-      {addProduct && (
-        <ModalOverlay onClick={handleModalClick} data-overlay="true">
-          <ModalContent
-            onClick={e => e.stopPropagation()}
-            style={{
-              maxWidth: '90vw',      // landscape
-              width: '1200px',
-              maxHeight: '80vh',
-              overflowY: 'auto',     // scrollable
-              padding: '1.5rem',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '1.5rem',
-            }}
-          >
-      {/* left column: product info */}
-      <div>
-        <ModalTitle>Add Product</ModalTitle>
-        <Label>Name</Label>
-        <Input value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
-        <Label>Price</Label>
-        <Input type="number" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
-        <Label>Delivery</Label>
-        <Input value={newProduct.delivery} onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
-        <Label>Image URL</Label>
-        <Input value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
-        <Label>IAR URL</Label>
-        <Input value={newProduct.arUrl} onChange={e => setNewProduct({ ...newProduct, arUrl: e.target.value })} />
-      </div>
-
-     <div>
-  <Label style={{ color: '#000' }}>Stock</Label> 
-
-      {/* Category Selection */}
-      <div style={{ marginBottom: '1rem' }}>
-        <Label style={{ color: '#000' }}>Main Category</Label>
-        {['Top', 'Bottom'].map(main => (
-          <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
-            <input
-              type="radio"
-              name="mainCategoryAdd"
-              value={main}
-              checked={newProductCategory.main === main}
-              onChange={() =>
-                setNewProductCategory({ main, sub: '' })
-              }
-            />
-            {main.toUpperCase()}
-          </label>
         ))}
 
-        {newProductCategory.main && (
-          <div style={{ marginTop: '0.5rem' }}>
-            <Label style={{ color: '#000' }}>Sub Category</Label>
-            {subCategoryMap[newProductCategory.main].map(sub => (
-              <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
-                <input
-                  type="radio"
-                  name="subCategoryAdd"
-                  value={sub}
-                  checked={newProductCategory.sub === sub}
-                  onChange={() =>
-                    setNewProductCategory({ ...newProductCategory, sub })
-                  }
-                />
-                {sub}
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-   
-        {/* Stock and Size Table */}
-        <div>
-          <Label style={{ color: '#000' }}>Stock</Label>
-          <table
-            border="1"
-            style={{
-              marginTop: '5px',
-              borderCollapse: 'collapse',
-              width: '100%',
-              background: '#fff',
-              color: '#000',
-            }}
-          >
-            <thead>
-              <tr>
-                <th>Size</th>
-
-                {/* ✅ Use newProductCategory.main instead */}
-                {newProductCategory.main === 'Top' ? (
-                  <>
-                    <th>Height (cm)</th>
-                    <th>Weight (kg)</th>
-                    <th>Shoulder (cm)</th>
-                    <th>Chest (cm)</th>
-                    <th>Stock</th>
-                  </>
-                ) : newProductCategory.main === 'Bottom' ? (
-                  <>
-                    <th>Waist (cm)</th>
-                    <th>Hip (cm)</th>
-                    <th>Height (cm)</th>
-                    <th>Weight (kg)</th>
-                    <th>Stock</th>
-                  </>
-                ) : null}
-              </tr>
-            </thead>
-
-            <tbody>
-              {['S', 'M', 'L', 'XL'].map(size => {
-                const sizeDataTop = {
-                  S: { height: '150–165', weight: '45–60', shoulder: '37–44', chest: '81–92' },
-                  M: { height: '155–170', weight: '50–68', shoulder: '39–46', chest: '86–96' },
-                  L: { height: '160–175', weight: '55–75', shoulder: '41–48', chest: '91–100' },
-                  XL: { height: '165–180', weight: '62–85', shoulder: '43–50', chest: '97–106' },
-                };
-
-                const sizeDataBottom = {
-                  S: { waist: '63–76', hip: '87–92', height: '150–165', weight: '45–60' },
-                  M: { waist: '67–82', hip: '91–96', height: '155–170', weight: '50–68' },
-                  L: { waist: '71–88', hip: '95–100', height: '160–175', weight: '55–75' },
-                  XL: { waist: '77–94', hip: '99–105', height: '165–180', weight: '62–85' },
-                };
-
-                const data =
-                  newProductCategory.main === 'Top'
-                    ? sizeDataTop[size]
-                    : newProductCategory.main === 'Bottom'
-                    ? sizeDataBottom[size]
-                    : null;
-
-                return (
-                  <tr key={size}>
-                    <td>{size}</td>
-
-                    {newProductCategory.main === 'Top' && (
-                      <>
-                        <td>{data.height}</td>
-                        <td>{data.weight}</td>
-                        <td>{data.shoulder}</td>
-                        <td>{data.chest}</td>
-                      </>
-                    )}
-                    {newProductCategory.main === 'Bottom' && (
-                      <>
-                        <td>{data.waist}</td>
-                        <td>{data.hip}</td>
-                        <td>{data.height}</td>
-                        <td>{data.weight}</td>
-                      </>
-                    )}
-
-                    <td>
-                      <input
-                        type="number"
-                        value={newProduct.stock?.[size] ?? 0}
-                        onChange={e => {
-                          const updated = { ...newProduct.stock };
-                          updated[size] = Number(e.target.value);
-                          setNewProduct({ ...newProduct, stock: updated });
-                        }}
-                        style={{ width: '80px' }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
+        <div onClick={() => setAddProduct(true)} className="add-card">
+          + Add Product
         </div>
-      </div>
 
+        {/* Add Product Modal */}
+        {addProduct && (
+          <ModalOverlay onClick={handleModalClick} data-overlay="true">
+            <ModalContent
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: '90vw',
+                width: '1200px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                padding: '1.5rem',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '2rem',
+              }}
+            >
+              {/* left column card */}
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                color: '#000',
+                width: '500px'
+              }}>
+                <ModalTitle>Add Product</ModalTitle>
+                <Label>Name</Label>
+                <Input value={newProduct.name} placeholder='Enter Product Name' onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                <Label>Price</Label>
+                <Input type="number" value={newProduct.price} placeholder='Enter Product Price' onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
+                <Label>Delivery</Label>
+                <Input value={newProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
+                <Label>Image URL</Label>
+                <Input value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
+                <Label>AR URL</Label>
+                <Input value={newProduct.arUrl} onChange={e => setNewProduct({ ...newProduct, arUrl: e.target.value })} />
+              </div>
 
-      {/* footer buttons */}
-      <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                <SaveButton onClick={handleAddProduct}>Add</SaveButton>
-                <CancelButton onClick={() => setAddProduct(false)}>Cancel</CancelButton>
+              {/* right column card */}
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                color: '#000',
+                width: '600px'
+              }}>
+                <Label style={{ color: '#a166ff'  }}>Stock & Category</Label>
+                {/* Category Selection */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <Label style={{ color: '#000' }}>Main Category</Label>
+                  {['Top', 'Bottom'].map(main => (
+                    <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
+                      <input
+                        type="radio"
+                        name="mainCategoryAdd"
+                        value={main}
+                        checked={newProductCategory.main === main}
+                        onChange={() =>
+                          setNewProductCategory({ main, sub: '' })
+                        }
+                      />
+                      {main.toUpperCase()}
+                    </label>
+                  ))}
+
+                  {newProductCategory.main && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <Label style={{ color: '#000' }}>Sub Category</Label>
+                      {subCategoryMap[newProductCategory.main].map(sub => (
+                        <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
+                          <input
+                            type="radio"
+                            name="subCategoryAdd"
+                            value={sub}
+                            checked={newProductCategory.sub === sub}
+                            onChange={() =>
+                              setNewProductCategory({ ...newProductCategory, sub })
+                            }
+                          />
+                          {sub}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Stock Table */}
+                <div>
+                  <Label style={{ color: '#000' }}>Stock</Label>
+                  <table border="1" style={{ marginTop: '5px', borderCollapse: 'collapse', width: '100%', background: '#fff', color: '#000' }}>
+                    <thead>
+                      <tr>
+                        <th>Size</th>
+                        {newProductCategory.main === 'Top' ? (
+                          <>
+                            <th>Height (cm)</th>
+                            <th>Weight (kg)</th>
+                            <th>Shoulder (cm)</th>
+                            <th>Chest (cm)</th>
+                            <th>Stock</th>
+                          </>
+                        ) : newProductCategory.main === 'Bottom' ? (
+                          <>
+                            <th>Waist (cm)</th>
+                            <th>Hip (cm)</th>
+                            <th>Height (cm)</th>
+                            <th>Weight (kg)</th>
+                            <th>Stock</th>
+                          </>
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SIZE_OPTIONS.map(size => {
+                        const sizeDataTop = {
+                          S: { height: '150–165', weight: '45–60', shoulder: '37–44', chest: '81–92' },
+                          M: { height: '155–170', weight: '50–68', shoulder: '39–46', chest: '86–96' },
+                          L: { height: '160–175', weight: '55–75', shoulder: '41–48', chest: '91–100' },
+                          XL: { height: '165–180', weight: '62–85', shoulder: '43–50', chest: '97–106' },
+                        };
+                        const sizeDataBottom = {
+                          S: { waist: '63–76', hip: '87–92', height: '150–165', weight: '45–60' },
+                          M: { waist: '67–82', hip: '91–96', height: '155–170', weight: '50–68' },
+                          L: { waist: '71–88', hip: '95–100', height: '160–175', weight: '55–75' },
+                          XL: { waist: '77–94', hip: '99–105', height: '165–180', weight: '62–85' },
+                        };
+
+                        const data = newProductCategory.main === 'Top' ? sizeDataTop[size] :
+                                     newProductCategory.main === 'Bottom' ? sizeDataBottom[size] : null;
+
+                        return (
+                          <tr key={size}>
+                            <td>{size}</td>
+                            {data ? Object.values(data).map((val, i) => <td key={i}>{val}</td>) : null}
+                            <td>
+                              <Input type="number" value={newProduct.stock[size]} onChange={e => setNewProduct({ ...newProduct, stock: { ...newProduct.stock, [size]: e.target.value } })} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                  <SaveButton onClick={handleAddProduct}>Save</SaveButton>
+                  <CancelButton onClick={() => setAddProduct(false)}>Cancel</CancelButton>
+                </div>
               </div>
             </ModalContent>
           </ModalOverlay>
         )}
 
+        {/* Edit Product Modal */}
+        {editProduct && (
+          <ModalOverlay onClick={handleModalClick} data-overlay="true">
+            <ModalContent
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: '90vw',
+                width: '1200px',
+                maxHeight: '80vh',
+                overflowY: 'auto',
+                padding: '1.5rem',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '2rem',
+              }}
+            >
+              {/* left column card */}
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                color: '#000',
+                width: '500px'
+              }}>
+                <ModalTitle>Edit Product</ModalTitle>
+                <Label>Name</Label>
+                <Input value={editProduct.name} placeholder='Enter Product Name' onChange={e => setEditProduct({ ...editProduct, name: e.target.value })} />
+                <Label>Price</Label>
+                <Input type="number" value={editProduct.price} placeholder='Enter Product Price' onChange={e => setEditProduct({ ...editProduct, price: e.target.value })} />
+                <Label>Delivery</Label>
+                <Input value={editProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })} />
+                <Label>Image URL</Label>
+                <Input value={editProduct.imageUrl} onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })} />
+                <Label>AR URL</Label>
+                <Input value={editProduct.arUrl} onChange={e => setEditProduct({ ...editProduct, arUrl: e.target.value })} />
+              </div>
 
-      {/* Edit Product Modal */}
-      {editProduct && (
-        <ModalOverlay onClick={handleModalClick} data-overlay="true">
-          <ModalContent
-            onClick={e => e.stopPropagation()}
-            style={{
-              maxWidth: '90vw',      // almost full width
-              width: '1200px',       // fixed wide width
-              maxHeight: '80vh',     // max height to fit screen
-              overflowY: 'auto',     // allow vertical scrolling
-              padding: '1.5rem',
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr', // two-column layout
-              gap: '1.5rem',
-            }}
-          >
-            {/* left column: product info */}
-            <div>
-              <ModalTitle>Edit Product</ModalTitle>
-              <Label>Product ID</Label>
-              <Input value={editProduct.productID || ''} readOnly />
-              <Label>Name</Label>
-              <Input value={editProduct.name} onChange={e => setEditProduct({ ...editProduct, name: e.target.value })} />
-              <Label>Price</Label>
-              <Input type="number" value={editProduct.price} onChange={e => setEditProduct({ ...editProduct, price: e.target.value })} />
-              <Label>Delivery</Label>
-              <Input value={editProduct.delivery} onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })} />
-              <Label>Image URL</Label>
-              <Input value={editProduct.imageUrl} onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })} />
-              <Label>AR URL</Label>
-              <Input value={editProduct.arUrl} onChange={e => setEditProduct({ ...editProduct, arUrl: e.target.value })} />
-            </div>
+              {/* right column card */}
+              <div style={{
+                background: '#fff',
+                padding: '1rem',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                color: '#000',
+                width: '610px'
+              }}>
+                <Label style={{ color: '#a166ff' }}>Stock & Category</Label>
+                {/* Category Selection */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <Label style={{ color: '#000' }}>Main Category</Label>
+                  {['Top', 'Bottom'].map(main => (
+                    <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
+                      <input
+                        type="radio"
+                        name="mainCategoryEdit"
+                        value={main}
+                        checked={editProduct.categoryMain === main}
+                        onChange={() =>
+                          setEditProduct({ ...editProduct, categoryMain: main, categorySub: '' })
+                        }
+                      />
+                      {main.toUpperCase()}
+                    </label>
+                  ))}
 
-            <div>
-    <Label style={{ color: '#000' }}>Stock</Label>
+                  {editProduct.categoryMain && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <Label style={{ color: '#000' }}>Sub Category</Label>
+                      {subCategoryMap[editProduct.categoryMain].map(sub => (
+                        <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
+                          <input
+                            type="radio"
+                            name="subCategoryEdit"
+                            value={sub}
+                            checked={editProduct.categorySub === sub}
+                            onChange={() =>
+                              setEditProduct({ ...editProduct, categorySub: sub })
+                            }
+                          />
+                          {sub}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
- 
-      <div style={{ marginBottom: '1rem' }}>
-        <Label style={{ color: '#000' }}>Main Category</Label>
-        {['Top', 'Bottom'].map(main => (
-          <label key={main} style={{ marginRight: '1rem', color: '#000' }}>
-            <input
-              type="radio"
-              name="mainCategoryEdit"
-              value={main}
-              checked={editProduct.categoryMain === main}
-              onChange={() =>
-                setEditProduct({ ...editProduct, categoryMain: main, categorySub: '' })
-              }
-            />
-            {main.toUpperCase()}
-          </label>
-        ))}
+                {/* Stock Table */}
+                <div>
+                  <Label style={{ color: '#000' }}>Stock</Label>
+                  <table border="1" style={{ marginTop: '5px', borderCollapse: 'collapse', width: '100%', background: '#fff', color: '#000' }}>
+                    <thead>
+                      <tr>
+                        <th>Size</th>
+                        {editProduct.categoryMain === 'Top' ? (
+                          <>
+                            <th>Height (cm)</th>
+                            <th>Weight (kg)</th>
+                            <th>Shoulder (cm)</th>
+                            <th>Chest (cm)</th>
+                            <th>Stock</th>
+                          </>
+                        ) : editProduct.categoryMain === 'Bottom' ? (
+                          <>
+                            <th>Waist (cm)</th>
+                            <th>Hip (cm)</th>
+                            <th>Height (cm)</th>
+                            <th>Weight (kg)</th>
+                            <th>Stock</th>
+                          </>
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SIZE_OPTIONS.map(size => {
+                        const sizeDataTop = {
+                          S: { height: '150–165', weight: '45–60', shoulder: '37–44', chest: '81–92' },
+                          M: { height: '155–170', weight: '50–68', shoulder: '39–46', chest: '86–96' },
+                          L: { height: '160–175', weight: '55–75', shoulder: '41–48', chest: '91–100' },
+                          XL: { height: '165–180', weight: '62–85', shoulder: '43–50', chest: '97–106' },
+                        };
+                        const sizeDataBottom = {
+                          S: { waist: '63–76', hip: '87–92', height: '150–165', weight: '45–60' },
+                          M: { waist: '67–82', hip: '91–96', height: '155–170', weight: '50–68' },
+                          L: { waist: '71–88', hip: '95–100', height: '160–175', weight: '55–75' },
+                          XL: { waist: '77–94', hip: '99–105', height: '165–180', weight: '62–85' },
+                        };
 
-        {editProduct.categoryMain && (
-          <div style={{ marginTop: '0.5rem' }}>
-            <Label style={{ color: '#000' }}>Sub Category</Label>
-            {subCategoryMap[editProduct.categoryMain].map(sub => (
-              <label key={sub} style={{ marginRight: '1rem', color: '#000' }}>
-                <input
-                  type="radio"
-                  name="subCategoryEdit"
-                  value={sub}
-                  checked={editProduct.categorySub === sub}
-                  onChange={() => setEditProduct({ ...editProduct, categorySub: sub })}
-                />
-                {sub}
-              </label>
-            ))}
-          </div>
+                        const data = editProduct.categoryMain === 'Top' ? sizeDataTop[size] :
+                                     editProduct.categoryMain === 'Bottom' ? sizeDataBottom[size] : null;
+
+                        return (
+                          <tr key={size}>
+                            <td>{size}</td>
+                            {data ? Object.values(data).map((val, i) => <td key={i}>{val}</td>) : null}
+                            <td>
+                              <Input  type="number" value={editProduct.stock[size]} onChange={e => setEditProduct({ ...editProduct, stock: { ...editProduct.stock, [size]: e.target.value } })} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                  <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
+                  <CancelButton onClick={() => setEditProduct(null)}>Cancel</CancelButton>
+                </div>
+              </div>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm.show && (
+          <ModalOverlay onClick={handleModalClick} data-overlay="true">
+            <ModalContent style={{ maxWidth: '400px', padding: '1rem', textAlign: 'center', color: '#363636ff', fontSize: '20px'}}>
+              <p>Are you sure you want to delete {productToDelete?.name}?</p>
+              <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '55px' }}>
+                <SaveButton onClick={confirmDelete}>Yes</SaveButton>
+                <CancelButton onClick={() => setDeleteConfirm({ show: false, id: null })}>No</CancelButton>
+              </div>
+            </ModalContent>
+          </ModalOverlay>
         )}
       </div>
-
-        {/* Stock and Size Table */}
-        <div>
-          <Label style={{ color: '#000' }}>Stock</Label>
-          <table
-            border="1"
-            style={{
-              marginTop: '5px',
-              borderCollapse: 'collapse',
-              width: '100%',
-              background: '#fff',
-              color: '#000',
-            }}
-          >
-            <thead>
-              <tr>
-                <th>Size</th>
-
-                {/* Conditional Columns */}
-                {editProduct.categoryMain === 'Top' ? (
-                  <>
-                    <th>Height (cm)</th>
-                    <th>Weight (kg)</th>
-                    <th>Shoulder (cm)</th>
-                    <th>Chest (cm)</th>
-                    <th>Stock</th>
-                  </>
-                ) : editProduct.categoryMain === 'Bottom' ? (
-                  <>
-                    <th>Waist (cm)</th>
-                    <th>Hip (cm)</th>
-                    <th>Height (cm)</th>
-                    <th>Weight (kg)</th>
-                    <th>Stock</th>
-                  </>
-                ) : null}
-              </tr>
-            </thead>
-
-            <tbody>
-              {['S', 'M', 'L', 'XL'].map(size => {
-                // Measurement data for Top
-                const sizeDataTop = {
-                  S: { height: '150–165', weight: '45–60', shoulder: '37–44', chest: '81–92' },
-                  M: { height: '155–170', weight: '50–68', shoulder: '39–46', chest: '86–96' },
-                  L: { height: '160–175', weight: '55–75', shoulder: '41–48', chest: '91–100' },
-                  XL: { height: '165–180', weight: '62–85', shoulder: '43–50', chest: '97–106' },
-                };
-
-                // Measurement data for Bottom
-                const sizeDataBottom = {
-                  S: { waist: '63–76', hip: '87–92', height: '150–165', weight: '45–60' },
-                  M: { waist: '67–82', hip: '91–96', height: '155–170', weight: '50–68' },
-                  L: { waist: '71–88', hip: '95–100', height: '160–175', weight: '55–75' },
-                  XL: { waist: '77–94', hip: '99–105', height: '165–180', weight: '62–85' },
-                };
-
-                const data =
-                  editProduct.categoryMain === 'Top'
-                    ? sizeDataTop[size]
-                    : editProduct.categoryMain === 'Bottom'
-                    ? sizeDataBottom[size]
-                    : null;
-
-                return (
-                  <tr key={size}>
-                    <td>{size}</td>
-
-                    {/* Conditional Value Display */}
-                    {editProduct.categoryMain === 'Top' && (
-                      <>
-                        <td>{data.height}</td>
-                        <td>{data.weight}</td>
-                        <td>{data.shoulder}</td>
-                        <td>{data.chest}</td>
-                      </>
-                    )}
-                    {editProduct.categoryMain === 'Bottom' && (
-                      <>
-                        <td>{data.waist}</td>
-                        <td>{data.hip}</td>
-                        <td>{data.height}</td>
-                        <td>{data.weight}</td>
-                      </>
-                    )}
-
-                    {/* Stock Input */}
-                    <td>
-                      <input
-                        type="number"
-                        value={editProduct.stock?.[size] ?? 0}
-                        onChange={e => {
-                          const updated = { ...editProduct.stock };
-                          updated[size] = Number(e.target.value);
-                          setEditProduct({ ...editProduct, stock: updated });
-                        }}
-                        style={{ width: '80px' }}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-
-            {/* footer buttons spanning both columns */}
-            <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
-              <CancelButton onClick={() => setEditProduct(null)}>Cancel</CancelButton>
-            </div>
-          </ModalContent>
-        </ModalOverlay>
-      )}
-
-
-      {/* Delete Confirmation */}
-      {deleteConfirm.show && (
-        <ModalOverlay onClick={handleModalClick} data-overlay="true">
-          <ModalContent onClick={e => e.stopPropagation()}>
-            <ModalTitle>Confirm Delete</ModalTitle>
-            <p>Are you sure you want to delete {productToDelete?.name}?</p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
-              <SaveButton onClick={confirmDelete}>Yes</SaveButton>
-              <CancelButton onClick={() => setDeleteConfirm({ show: false, id: null })}>Cancel</CancelButton>
-            </div>
-          </ModalContent>
-        </ModalOverlay>
-      )}
-    </div>
+    </>
   );
-};
-
-const editBtn = {
-  background: '#fff',
-  color: '#000',
-  padding: '0.5rem 1rem',
-  borderRadius: '8px',
-  cursor: 'pointer',
-};
-
-const deleteBtn = {
-  background: '#ccc',
-  color: '#000',
-  padding: '0.5rem 1rem',
-  borderRadius: '8px',
-  cursor: 'pointer',
 };
 
 export default Products;
