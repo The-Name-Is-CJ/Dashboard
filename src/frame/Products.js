@@ -131,6 +131,7 @@ const Products = () => {
         delivery: formatDelivery(newProduct.delivery),
         imageUrl: newProduct.imageUrl || '',
         arUrl: newProduct.arUrl || '',
+        description: newProduct.description || '',
         rating: 0,
         sold: 0,
         stock: stockData,
@@ -155,6 +156,7 @@ const Products = () => {
         delivery: '',
         imageUrl: '',
         arUrl: '',
+        description: '',
         stock: { S: 0, M: 0, L: 0, XL: 0 },
       });
       setNewProductCategory({ main: '', sub: '' });
@@ -181,6 +183,7 @@ const Products = () => {
         delivery: formatDelivery(editProduct.delivery),
         imageUrl: editProduct.imageUrl || '',
         arUrl: editProduct.arUrl || '',
+        description: editProduct.description || '',
         stock: updatedStock,
         totalStock: totalStock,
         categoryMain: editProduct.categoryMain,
@@ -382,8 +385,23 @@ const Products = () => {
                 <Input value={newProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
                 <Label>Image URL</Label>
                 <Input value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
-                <Label>AR URL</Label>
+                <Label>AR URL/LINK</Label>
                 <Input value={newProduct.arUrl} onChange={e => setNewProduct({ ...newProduct, arUrl: e.target.value })} />
+                <Label>Description</Label>
+                  <textarea
+                    value={newProduct.description}
+                    placeholder="Enter product description"
+                    onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
+                    style={{
+                      width: '100%',
+                      minHeight: '100px',  // <-- makes it bigger
+                      padding: '0.5rem',
+                      borderRadius: '8px',
+                      border: '1px solid #ccc',
+                      resize: 'vertical', // <-- allows vertical resize
+                    }}
+                  />
+
               </div>
 
               {/* right column card */}
@@ -536,8 +554,24 @@ const Products = () => {
                 <Input value={editProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })} />
                 <Label>Image URL</Label>
                 <Input value={editProduct.imageUrl} onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })} />
-                <Label>AR URL</Label>
+                <Label>AR URL/LINK</Label>
                 <Input value={editProduct.arUrl} onChange={e => setEditProduct({ ...editProduct, arUrl: e.target.value })} />
+                <Label>Description</Label>
+                <textarea
+                  value={editProduct.description || ''}
+                  placeholder="Enter product description"
+                  onChange={e => setEditProduct({ ...editProduct, description: e.target.value })}
+                  style={{
+                    width: '100%',
+                    minHeight: '100px',  // bigger area for description
+                    padding: '0.5rem',
+                    borderRadius: '8px',
+                    border: '1px solid #ccc',
+                    resize: 'vertical',
+                    marginBottom: '1rem'
+                  }}
+                />
+
               </div>
 
               {/* right column card */}

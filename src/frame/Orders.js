@@ -12,7 +12,7 @@ import {
   TableData,
   StatusButton,
 } from '../components/orderstyle';
-import { collection, query, onSnapshot, doc, deleteDoc, setDoc, orderBy, getDocs, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, deleteDoc, setDoc, orderBy, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 // Modal styles
@@ -59,6 +59,31 @@ const modalStyles = {
     cursor: 'pointer',
   },
 };
+// Search bar styles
+const searchStyles = {
+  container: {
+    position: 'relative',
+    width: '500px',
+  },
+  input: {
+    width: '100%',
+    padding: '10px 40px 10px 15px', // extra space for icon
+    borderRadius: '10px',
+    border: '1px solid #ccc',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+    fontSize: '14px',
+    outline: 'none',
+    transition: 'all 0.2s ease-in-out',
+  },
+  icon: {
+    position: 'absolute',
+    right: '12px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontSize: '16px',
+    color: '#888',
+  },
+};
 
 // Modal component placed right below the style
 const ConfirmationModal = ({ visible, onConfirm, onCancel }) => {
@@ -82,72 +107,23 @@ const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
 
   useEffect(() => {
   const ordersRef = collection(db, 'orders');
-
-  // Order results by createdAt ascending (oldest first)
   const q = query(ordersRef, orderBy('createdAt', 'asc'));
 
-  const unsubscribe = onSnapshot(q, async (snapshot) => {
+  const unsubscribe = onSnapshot(q, (snapshot) => {
     try {
-      const fetchedOrders = [];
-      const userIds = new Set();
-
-      // Collect orders and their userIds
-      snapshot.forEach((docSnap) => {
-        const orderData = { id: docSnap.id, ...docSnap.data() };
-        fetchedOrders.push(orderData);
-        if (orderData.userId) userIds.add(orderData.userId);
-      });
-
-      // If there are no userIds, just set orders
-      if (userIds.size === 0) {
-        setOrders(fetchedOrders);
-        return;
-      }
-
-      // Batch fetch users by querying users where userId == <value>
-      // (we do one query per distinct userId; this matches your DB shape)
-      const userIdArray = Array.from(userIds);
-      const userMap = {}; // userId -> name
-
-      await Promise.all(
-        userIdArray.map(async (uid) => {
-          try {
-            const usersQuery = query(collection(db, 'users'), where('userId', '==', uid));
-            const usersSnap = await getDocs(usersQuery);
-            if (!usersSnap.empty) {
-              const uDoc = usersSnap.docs[0];
-              const uData = uDoc.data();
-              // robust name detection with fallbacks
-              const name =
-                uData.name ||
-                uData.displayName ||
-                uData.fullName ||
-                ((uData.firstName || uData.lastName) ? `${uData.firstName || ''} ${uData.lastName || ''}`.trim() : null) ||
-                uid;
-              userMap[uid] = name;
-            } else {
-              userMap[uid] = uid; // fallback to uid if not found
-            }
-          } catch (err) {
-            console.error('Error fetching user for userId=', uid, err);
-            userMap[uid] = uid;
-          }
-        })
-      );
-
-      // Attach names to orders
-      const ordersWithNames = fetchedOrders.map((order) => ({
-        ...order,
-        name: userMap[order.userId] || order.userId,
+      const fetchedOrders = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(), // name is already included in the order doc
       }));
 
-      setOrders(ordersWithNames);
+      setOrders(fetchedOrders);
     } catch (err) {
-      console.error('Error processing orders snapshot:', err);
-      // still set raw orders if something failed earlier
+      console.error('Error fetching orders:', err);
       const fallback = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
       setOrders(fallback);
     }
@@ -166,22 +142,27 @@ const Orders = () => {
   ];
 
   const filterOrders = () => {
-    const path = location.pathname;
-    switch (path) {
-      case '/orders/toship':
-        return orders.filter(order => order.status === 'To Ship');
-      case '/orders/toreceive':
-        return orders.filter(order => order.status === 'To Receive');
-      case '/orders/cancelled':
-        return orders.filter(order => order.status === 'Cancelled');
-      case '/orders/complete':
-        return orders.filter(order => order.status === 'Complete');
-      default:
-        return orders;
-    }
-  };
-
+      const path = location.pathname;
+      switch (path) {
+        case '/orders/toship':
+          return orders.filter(order => order.status === 'To Ship');
+        case '/orders/toreceive':
+          return orders.filter(order => order.status === 'To Receive');
+        case '/orders/cancelled':
+          return orders.filter(order => order.status === 'Cancelled');
+        case '/orders/complete':
+          return orders.filter(order => order.status === 'Complete');
+        default:
+          return orders;
+      }
+    };
   const displayedOrders = filterOrders();
+
+  const filteredOrders = displayedOrders.filter(order =>
+    order.orderId.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  
 
   const handleStatusClick = (orderId) => {
     setSelectedOrderId(orderId);
@@ -189,22 +170,38 @@ const Orders = () => {
   };
 
   const handleConfirm = async () => {
-    try { 
-
+    try {
       const orderToMove = orders.find(order => order.id === selectedOrderId);
       if (!orderToMove) return;
-  
+
+      const { id, ...orderDataWithoutId } = orderToMove;
+
       const updatedOrder = {
-        ...orderToMove,
+        ...orderDataWithoutId,
         status: "To Ship",
+        packedAt: new Date(),
+        toshipID: `TS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         items: orderToMove.items.map(item => ({
-          ...item,
-          status: "To Ship", 
+          ...item, 
         })),
       };
-  
-      await setDoc(doc(db, "toShip", updatedOrder.id), updatedOrder); 
-      await deleteDoc(doc(db, "orders", updatedOrder.id));
+
+      
+      await setDoc(doc(db, "toShip", orderToMove.id), updatedOrder);
+
+      // Remove from "orders" collection
+      await deleteDoc(doc(db, "orders", orderToMove.id));
+
+      const notificationsRef = collection(db, "notifications");
+        await addDoc(notificationsRef, {
+          notifID: `NTP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          userId: orderToMove.userId,
+          title: "Order Packed",
+          message: "Your order has been packed and is waiting to be shipped.",
+          orderId: orderToMove.orderId,
+          timestamp: new Date(),
+          read: false,
+        });
 
       setModalVisible(false);
       setSelectedOrderId(null);
@@ -213,7 +210,8 @@ const Orders = () => {
       setModalVisible(false);
     }
   };
- 
+
+
   const handleCancel = () => {
     setModalVisible(false);
     setSelectedOrderId(null);
@@ -221,7 +219,29 @@ const Orders = () => {
 
   return (
     <OrdersContainer>
-      <OrdersHeader>Orders</OrdersHeader>
+      <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>Orders</h2>
+
+       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        
+          <div style={searchStyles.container}> 
+            <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
+            <input
+              type="text"
+              placeholder="Find order"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={searchStyles.input}
+              onFocus={(e) => (e.target.style.borderColor = '#9747FF')}
+              onBlur={(e) => (e.target.style.borderColor = '#ccc')}
+            />
+            <span style={searchStyles.icon}>🔍</span>
+          </div> 
+        </div>
+
+      </OrdersHeader>
+
+
 
       <OrdersTabs>
         {tabs.map(tab => (
@@ -241,14 +261,13 @@ const Orders = () => {
             <TableHeader>Order Date</TableHeader>
             <TableHeader>Product</TableHeader>
             <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Colors</TableHeader>
+            <TableHeader>Amount</TableHeader> 
             <TableHeader>Sizes</TableHeader>
             <TableHeader>Status</TableHeader>
           </TableRow>
         </TableHead>
-        <tbody>
-          {displayedOrders.map(order =>
+       <tbody>
+          {filteredOrders.map(order =>
             order.items.map(item => (
               <TableRow key={item.id}>
                 <TableData>{order.name}</TableData>
@@ -256,8 +275,7 @@ const Orders = () => {
                 <TableData>{order.createdAt?.toDate().toLocaleString()}</TableData>
                 <TableData>{item.productName}</TableData>
                 <TableData>{item.quantity}</TableData>
-                <TableData>₱{order.total}</TableData>
-                <TableData>{item.color || '-'}</TableData>
+                <TableData>₱{order.total}</TableData> 
                 <TableData>{item.size || '-'}</TableData>
                 <TableData>
                   {(order.status === 'Pending' || order.status === 'To Ship') ? (
@@ -272,6 +290,7 @@ const Orders = () => {
             ))
           )}
         </tbody>
+
       </OrdersTable>
 
       <ConfirmationModal

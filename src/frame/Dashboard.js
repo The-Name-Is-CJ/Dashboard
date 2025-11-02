@@ -163,18 +163,22 @@ const LogDetails = styled.div`
 `;
 
 const ToggleLogsButton = styled.button`
-  margin-top: 0.8rem;
-  background: transparent;
+  display: block;          /* makes it center with margin auto */
+  margin: 1rem auto 0;     /* top 1rem, auto left/right, 0 bottom */
+  background: rgb(85, 91, 199);
+  color: white;
   border: none;
-  color: rgb(85, 91, 199);
+  padding: 8px 16px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: bold;
   font-size: 0.9rem;
+  font-weight: bold;
 
   &:hover {
-    text-decoration: underline;
+    background: #6b6ed9;
   }
 `;
+
 
 const RatingScale = styled.div`
   display: flex;
@@ -200,6 +204,8 @@ const ScaleBox = styled.div`
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 `;
 
+
+
 const Dashboard = () => {
   const [lowStockItems, setLowStockItems] = useState([]);
   const [soldSum, setSoldSum] = useState(0);
@@ -207,6 +213,7 @@ const Dashboard = () => {
   const [soldData, setSoldData] = useState([]);
   const [averageRating, setAverageRating] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false); 
+  const [logSearchTerm, setLogSearchTerm] = useState('');
 
   const getTotalStock = (stock) => {
   if (!stock) return 0;
@@ -275,6 +282,57 @@ const Dashboard = () => {
     fetchProductStats();
     fetchLogs();
   }, []);
+
+// Filter logs based on search term (case-insensitive, supports month names)
+  const filteredLogs = logs.filter(log => {
+    if (!logSearchTerm) return true;
+
+    const term = logSearchTerm.toLowerCase();
+
+    // Check action or productName
+    const actionMatch = log.action?.toLowerCase().includes(term);
+    const productMatch = log.productName?.toLowerCase().includes(term);
+
+    // Convert timestamp to string with month names (e.g., "Sep 2, 2025, 10:15:00 AM")
+    let timestampStr = '';
+    if (log.timestamp?.toDate) {
+      const date = new Date(log.timestamp.toDate());
+      timestampStr = date.toLocaleString('en-US', {
+        month: 'long',    // full month name: "September"
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+      }).toLowerCase();
+    }
+
+    const dateMatch = timestampStr.includes(term);
+
+    return actionMatch || productMatch || dateMatch;
+  });
+
+  // Already in your code:
+  const logDates = [...new Set(logs.map(log => {
+    if (!log.timestamp?.toDate) return null;
+    const date = new Date(log.timestamp.toDate());
+    return date.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  }).filter(Boolean))];
+
+
+  // 2. Filter suggestions based on search term
+  const dateSuggestions = logDates.filter(d => d.includes(logSearchTerm));
+
+  // 3. Filter logs by selected date if a valid date is chosen
+  const displayedLogs = logSearchTerm && dateSuggestions.includes(logSearchTerm)
+    ? logs.filter(log => {
+        if (!log.timestamp?.toDate) return false;
+        const logDate = new Date(log.timestamp.toDate()).toISOString().split('T')[0];
+        return logDate === logSearchTerm;
+      })
+    : filteredLogs; // fallback to original filtered logs
+
+
 
   const toggleLog = id => {
     setLogs(prev =>
@@ -373,37 +431,94 @@ const Dashboard = () => {
       <LogsContainer>
         <LogsHeader>
           <LogsTitle>Activity Logs</LogsTitle>
-          <DeleteAllButton onClick={handleDeleteAllLogs}>
-            Delete All Logs
-          </DeleteAllButton>
+          
+          <div style={{ position: 'relative', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="Search the log data..."
+              value={logSearchTerm}
+              onChange={e => setLogSearchTerm(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1px solid #ccc',
+                outline: 'none',
+                fontSize: '0.9rem',
+                minWidth: '200px',
+              }}
+            />
+            <DeleteAllButton onClick={handleDeleteAllLogs}>Delete All Logs</DeleteAllButton>
+
+            {/* Auto-complete dropdown for dates */}
+            {logSearchTerm && dateSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '38px',
+                left: 0,
+                background: '#fff',
+                border: '1px solid #ccc',
+                borderRadius: '8px',
+                zIndex: 10,
+                width: '100%',
+                maxHeight: '180px',
+                overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              }}>
+                {dateSuggestions.map(date => (
+                  <div
+                    key={date}
+                    onClick={() => setLogSearchTerm(date)}
+                    style={{
+                      padding: '6px 10px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid #eee',
+                    }}
+                  >
+                    {date}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </LogsHeader>
 
-        {logs.length === 0 ? (
-          <p>No recent activity yet.</p>
-        ) : (
-          <>
-            {(showAllLogs ? logs : logs.slice(0, 3)).map(log => (
-              <div key={log.id}>
-                <LogItem>
-                  <LogLeft onClick={() => toggleLog(log.id)}>
-                    [{log.timestamp?.toDate ? new Date(log.timestamp.toDate()).toLocaleString() : 'Unknown Time'}] {log.action} <strong>{log.productName}</strong>
-                  </LogLeft>
-                  <DropdownButton onClick={() => handleDeleteLog(log.id)}>
-                    <FaTrash />
-                  </DropdownButton>
-                </LogItem>
-                {log.expanded && log.details && (
-                  <LogDetails>➤ {log.details}</LogDetails>
-                )}
-              </div>
-            ))}
-            {logs.length > 3 && (
-              <ToggleLogsButton onClick={() => setShowAllLogs(prev => !prev)}>
-                {showAllLogs ? 'Show Less ▲' : 'Show More ▼'}
-              </ToggleLogsButton>
-            )}
-          </>
-        )}
+          {logs.length === 0 ? (
+            <p>No recent activity yet.</p>
+          ) : (
+            <>
+              {displayedLogs.length === 0 ? (
+                <p>No logs found for this search.</p>
+              ) : (
+                <>
+                  {(showAllLogs || logSearchTerm ? displayedLogs : displayedLogs.slice(0, 5)).map(log => (
+                    <div key={log.id}>
+                      <LogItem>
+                        <LogLeft onClick={() => toggleLog(log.id)}>
+                          [{log.timestamp?.toDate
+                            ? new Date(log.timestamp.toDate()).toLocaleString()
+                            : 'Unknown Time'}] {log.action} <strong>{log.productName}</strong>
+                        </LogLeft>
+                        <DropdownButton onClick={() => handleDeleteLog(log.id)}>
+                          <FaTrash />
+                        </DropdownButton>
+                      </LogItem>
+                      {log.expanded && log.details && (
+                        <LogDetails>➤ {log.details}</LogDetails>
+                      )}
+                    </div>
+                  ))}
+
+                  {displayedLogs.length > 5 && (
+                    <ToggleLogsButton onClick={() => setShowAllLogs(prev => !prev)}>
+                      {showAllLogs ? 'Show Less ▲' : 'Show More ▼'}
+                    </ToggleLogsButton>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
       </LogsContainer>
     </Container>
   );

@@ -1,80 +1,155 @@
 import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
+import styled from 'styled-components'; // <-- move this to top
 import { FaStar, FaUserCircle } from 'react-icons/fa';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase'; // Adjust if path differs
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
 
-const FullScreenContainer = styled.div`
+const Reviews = () => {
+  const [products, setProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [reviews, setReviews] = useState([]);
+
+  // Fetch all products
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+      const prods = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setProducts(prods);
+      if (!selectedProduct && prods.length > 0) setSelectedProduct(prods[0]);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch reviews for selected product
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const q = query(
+      collection(db, 'productReviews'),
+      where('productID', '==', selectedProduct.productID) // note: match productID string
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setReviews(data);
+    });
+    return () => unsubscribe();
+  }, [selectedProduct]);
+
+  const renderStars = (count) => {
+    const stars = [];
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        i < count ? <FaStar key={i} /> : <FaStar key={i} style={{ opacity: 0.3 }} />
+      );
+    }
+    return stars;
+  };
+
+  return (
+    <Container>
+      <SideNav>
+        {products.map((product) => (
+          <ProductItem
+            key={product.id}
+            selected={selectedProduct?.id === product.id}
+            onClick={() => setSelectedProduct(product)}
+          >
+            <div>{product.name}</div>
+            <div className="product-id">{product.productID}</div>
+          </ProductItem>
+        ))}
+      </SideNav>
+      <ReviewPanel>
+        {selectedProduct ? (
+          <>
+            <h2>{selectedProduct.name} Reviews</h2>
+            {reviews.length === 0 && <p>No reviews yet.</p>}
+            {reviews.map((review) => (
+              <ReviewItem key={review.reviewID}>
+                <ReviewerRow>
+                  <FaUserCircle size={20} />
+                  <ReviewInfoText>
+                    <div>{review.userName}</div>
+                    <div>Size: {review.size || 'Unknown'}</div>
+                  </ReviewInfoText>
+                </ReviewerRow>
+                <StarRating>{renderStars(review.rating)}</StarRating>
+                <CommentText>{review.comment}</CommentText>
+                <small>
+                  {review.createdAt
+                    ? review.createdAt.toDate
+                      ? review.createdAt.toDate().toLocaleString()
+                      : new Date(review.createdAt.seconds * 1000).toLocaleString()
+                    : ''}
+                </small>
+              </ReviewItem>
+            ))}
+
+
+          </>
+        ) : (
+          <p>Select a product to view reviews</p>
+        )}
+      </ReviewPanel>
+    </Container>
+  );
+};
+
+export default Reviews;
+
+// ================= Styled Components =================
+
+const Container = styled.div`
+  display: flex;
   height: 100vh;
   width: 100vw;
-  background: linear-gradient(135deg, #a166ff, #ebdfff);
-  padding: 2rem;
-  box-sizing: border-box;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  background: #f5f0ff;
 `;
 
-const ReviewCard = styled.div`
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 16px;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  width: 90%;
-  max-width: 800px;
-  height: 100%;
-  padding: 1.5rem;
-  overflow: hidden;
-`;
-
-const IconBox = styled.div`
-  font-size: 1.8rem;
-  color: #fff;
-`;
-
-const LabelBox = styled.div`
-  line-height: 1.4;
-`;
-
-const Label = styled.div`
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 1rem;
-`;
-
-const ReviewsList = styled.div`
-  flex: 1;
+const SideNav = styled.div`
+  width: 300px;
+  background: #d9c6ff;
   overflow-y: auto;
-  padding-right: 0.5rem;
-  font-size: 0.95rem;
-  color: #fff;
+  padding: 1rem;
+`;
+
+const ProductItem = styled.div`
+  padding: 0.8rem;
+  margin-bottom: 0.5rem;
+  border-radius: 10px;
+  background: ${(props) => (props.selected ? '#a166ff' : 'transparent')};
+  color: ${(props) => (props.selected ? '#fff' : '#000')};
+  cursor: pointer;
+  &:hover {
+    background: #b788ff;
+    color: #fff;
+  }
+  .product-id {
+    font-size: 0.8rem;
+    margin-top: 2px;
+  }
+`;
+
+const ReviewPanel = styled.div`
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
 `;
 
 const ReviewItem = styled.div`
   background: rgba(255, 255, 255, 0.25);
   border-radius: 10px;
-  padding: 10px;
+  padding: 12px;
   margin-bottom: 12px;
-`;
-
-const ReviewHeader = styled.div`
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 6px;
 `;
 
 const ReviewerRow = styled.div`
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.5rem;
-`;
-
-const ReviewerIcon = styled.div`
-  font-size: 1.4rem;
+  flex-wrap: wrap;
 `;
 
 const ReviewInfoText = styled.div`
@@ -82,12 +157,6 @@ const ReviewInfoText = styled.div`
   font-weight: bold;
   display: flex;
   gap: 2rem;
-  align-items: center;
-`;
-
-const InfoPart = styled.div`
-  min-width: 120px;
-  white-space: nowrap;
 `;
 
 const StarRating = styled.div`
@@ -102,107 +171,3 @@ const CommentText = styled.div`
   margin-top: 4px;
   line-height: 1.3;
 `;
-
-const convertColorToName = (color) => {
-  const map = {
-    '#FF0000': 'Red',
-    '#00FF00': 'Lime',
-    '#0000FF': 'Blue',
-    '#FFFF00': 'Yellow',
-    '#FFA500': 'Orange',
-    '#800080': 'Purple',
-    '#000000': 'Black',
-    '#FFFFFF': 'White',
-    '#A166FF': 'Lavender',
-    '#FFB6C1': 'Pink',
-  };
-  if (!color) return 'Unknown';
-  const normalized = color.trim().toUpperCase();
-  return map[normalized] || color;
-};
-
-const renderStars = (count) => {
-  const stars = [];
-  for (let i = 0; i < 5; i++) {
-    stars.push(
-      i < count ? <FaStar key={i} /> : <FaStar key={i} style={{ opacity: 0.3 }} />
-    );
-  }
-  return stars;
-};
-
-const Reviews = () => {
-  const [reviews, setReviews] = useState([]);
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'productReviews'), async (snapshot) => {
-      const dataWithProductDetails = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          let productName = '';
-          let shortProductID = '';
-
-          try {
-            // Fetch the product doc from 'products' collection using productId from review
-            const productRef = doc(db, 'products', data.productId);
-            const productDoc = await getDoc(productRef);
-            if (productDoc.exists()) {
-              const productData = productDoc.data();
-              productName = productData.name || '';
-              // productID (e.g. CP002) is stored in 'productID' field in products collection
-              shortProductID = productData.productID || '';
-            }
-          } catch (error) {
-            console.error('Error fetching product data:', error);
-          }
-
-          return {
-            id: docSnap.id,
-            ...data,
-            productName,
-            shortProductID,
-          };
-        })
-      );
-
-      setReviews(dataWithProductDetails);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  return (
-    <FullScreenContainer>
-      <ReviewCard>
-        <IconBox>
-          <FaStar />
-        </IconBox>
-        <LabelBox>
-          <Label>Product Reviews</Label>
-        </LabelBox>
-        <ReviewsList>
-          {reviews.map((review) => (
-            <ReviewItem key={review.id}>
-              <ReviewHeader>
-                <ReviewerRow>
-                  <ReviewerIcon>
-                    <FaUserCircle />
-                  </ReviewerIcon>
-                  <ReviewInfoText>
-                    <InfoPart>{review.userName}</InfoPart>
-                    <InfoPart>Short Product ID: {review.shortProductID}</InfoPart>
-                    <InfoPart>Color: {convertColorToName(review.avatarColor)}</InfoPart>
-                  </ReviewInfoText>
-                </ReviewerRow>
-                <StarRating>{renderStars(review.rating)}</StarRating>
-              </ReviewHeader>
-              <CommentText>{review.comment}</CommentText>
-            </ReviewItem>
-          ))}
-        </ReviewsList>
-      </ReviewCard>
-    </FullScreenContainer>
-  );
-};
-
-export default Reviews;

@@ -14,12 +14,28 @@ import {
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
+// Search bar styles
+const searchStyles = {
+  container: { position: 'relative', width: '500px' },
+  input: {
+    width: '100%',
+    padding: '10px 40px 10px 15px',
+    borderRadius: '10px',
+    border: '1px solid #ccc',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+    fontSize: '14px',
+    outline: 'none',
+    transition: 'all 0.2s ease-in-out',
+  },
+  icon: { position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: '#888' },
+};
+
 const Complete = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    // Fetch from "completed" collection
     const completedRef = collection(db, 'completed');
     const unsubscribe = onSnapshot(completedRef, snapshot => {
       const fetched = [];
@@ -28,6 +44,16 @@ const Complete = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  // Filter orders by orderId
+  const filteredOrders = orders
+    .map(order => ({
+      ...order,
+      items: order.items.filter(item =>
+        order.orderId?.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    }))
+    .filter(order => order.items.length > 0);
 
   const tabs = [
     { name: 'Orders', path: '/orders' },
@@ -39,7 +65,24 @@ const Complete = () => {
 
   return (
     <OrdersContainer>
-      <OrdersHeader>Orders</OrdersHeader>
+      <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>Completed Orders</h2>
+
+        {/* Search bar */}
+        <div style={searchStyles.container}>
+          <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
+          <input
+            type="text"
+            placeholder="Find order"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={searchStyles.input}
+            onFocus={(e) => (e.target.style.borderColor = '#9747FF')}
+            onBlur={(e) => (e.target.style.borderColor = '#ccc')}
+          />
+          <span style={searchStyles.icon}>🔍</span>
+        </div>
+      </OrdersHeader>
 
       <OrdersTabs>
         {tabs.map(tab => (
@@ -60,23 +103,21 @@ const Complete = () => {
             <TableHeader>Product</TableHeader>
             <TableHeader>Quantity</TableHeader>
             <TableHeader>Amount</TableHeader>
-            <TableHeader>Colors</TableHeader>
             <TableHeader>Sizes</TableHeader>
             <TableHeader>Status</TableHeader>
           </TableRow>
         </TableHead>
         <tbody>
-          {orders.length > 0 ? (
-            orders.flatMap(order =>
+          {filteredOrders.length > 0 ? (
+            filteredOrders.flatMap(order =>
               order.items.map(item => (
                 <TableRow key={`${order.id}-${item.id}`}>
                   <TableData>{order.name || order.userId}</TableData>
                   <TableData>{order.address || '-'}</TableData>
-                  <TableData>{order.completedAt?.toDate().toLocaleString() || '-'}</TableData>
+                  <TableData>{order.receivedAt?.toDate().toLocaleString() || '-'}</TableData>
                   <TableData>{item.productName}</TableData>
                   <TableData>{item.quantity}</TableData>
                   <TableData>₱{item.price}</TableData>
-                  <TableData>{item.color || '-'}</TableData>
                   <TableData>{item.size || '-'}</TableData>
                   <TableData>
                     <button
@@ -89,20 +130,19 @@ const Complete = () => {
                         fontSize: '0.9rem',
                         display: 'inline-block',
                         border: 'none',
-                        cursor: 'default', // not clickable
+                        cursor: 'default',
                       }}
                       disabled
                     >
                       Completed
                     </button>
                   </TableData>
-
                 </TableRow>
               ))
             )
           ) : (
             <TableRow>
-              <TableData colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>
+              <TableData colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>
                 ✅ No completed orders found
               </TableData>
             </TableRow>

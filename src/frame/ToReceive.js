@@ -15,69 +15,94 @@ import {
 import { collection, query, onSnapshot, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
-const ToReceive = () => {
+
+// Search bar styles
+  const searchStyles = {
+    container: { position: 'relative', width: '500px' },
+    input: {
+      width: '100%',
+      padding: '10px 40px 10px 15px',
+      borderRadius: '10px',
+      border: '1px solid #ccc',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+      fontSize: '14px',
+      outline: 'none',
+      transition: 'all 0.2s ease-in-out',
+    },
+    icon: { position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: '#888' },
+  };
+
+  const ToReceive = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
 
   useEffect(() => {
-    const toReceiveRef = collection(db, 'toReceive'); // ✅ Use toReceive collection
-    const q = query(toReceiveRef);
+  const toReceiveRef = collection(db, 'toReceive');
+  const q = query(toReceiveRef);
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const fetchedOrders = [];
-      const userIds = new Set();
+  const unsubscribe = onSnapshot(q, async (snapshot) => {
+    const fetchedOrders = [];
+    const userIds = new Set();
 
-      snapshot.forEach(docSnap => {
-        const orderData = { id: docSnap.id, ...docSnap.data() };
-        fetchedOrders.push(orderData);
-        if (orderData.userId) userIds.add(orderData.userId);
-      });
-
-      if (userIds.size === 0) {
-        setOrders(fetchedOrders);
-        return;
-      }
-
-      // Fetch customer names
-      const userIdArray = Array.from(userIds);
-      const userMap = {};
-
-      await Promise.all(
-        userIdArray.map(async (uid) => {
-          try {
-            const usersQuery = query(collection(db, 'users'), where('userId', '==', uid));
-            const usersSnap = await getDocs(usersQuery);
-            if (!usersSnap.empty) {
-              const uData = usersSnap.docs[0].data();
-              const name =
-                uData.name ||
-                uData.displayName ||
-                uData.fullName ||
-                ((uData.firstName || uData.lastName)
-                  ? `${uData.firstName || ''} ${uData.lastName || ''}`.trim()
-                  : null) ||
-                uid;
-              userMap[uid] = name;
-            } else {
-              userMap[uid] = uid;
-            }
-          } catch (err) {
-            console.error("Error fetching user:", err);
-            userMap[uid] = uid;
-          }
-        })
-      );
-
-      const ordersWithNames = fetchedOrders.map(order => ({
-        ...order,
-        name: userMap[order.userId] || order.userId,
-      }));
-
-      setOrders(ordersWithNames);
+    snapshot.forEach(docSnap => {
+      const orderData = { id: docSnap.id, ...docSnap.data() };
+      fetchedOrders.push(orderData);
+      if (orderData.userId) userIds.add(orderData.userId);
     });
 
-    return () => unsubscribe();
-  }, []);
+    if (userIds.size === 0) {
+      setOrders(fetchedOrders);
+      return;
+    }
+
+    // 🔍 Fetch customer names from shippingLocations
+    const userIdArray = Array.from(userIds);
+    const userMap = {};
+
+    await Promise.all(
+      userIdArray.map(async (uid) => {
+        try {
+          const locQuery = query(
+            collection(db, 'shippingLocations'),
+            where('userId', '==', uid)
+          );
+          const locSnap = await getDocs(locQuery);
+          if (!locSnap.empty) {
+            const locData = locSnap.docs[0].data(); // first location
+            userMap[uid] = locData.name || 'Unknown';
+          } else {
+            userMap[uid] = 'Unknown';
+          }
+        } catch (err) {
+          console.error('Error fetching shipping location for userId=', uid, err);
+          userMap[uid] = 'Unknown';
+        }
+      })
+    );
+
+    // Attach names to orders
+    const ordersWithNames = fetchedOrders.map(order => ({
+      ...order,
+      name: userMap[order.userId] || 'Unknown',
+    }));
+
+    setOrders(ordersWithNames);
+  });
+
+  return () => unsubscribe();
+}, []);
+
+ // Filter orders by search term
+  const filteredOrders = orders
+    .map(order => ({
+      ...order,
+      items: order.items.filter(item =>
+        order.orderId?.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    }))
+    .filter(order => order.items.length > 0);
 
   const tabs = [
     { name: 'Orders', path: '/orders' },
@@ -89,7 +114,25 @@ const ToReceive = () => {
 
   return (
     <OrdersContainer>
-      <OrdersHeader>Orders</OrdersHeader>
+      <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ margin: 0 }}>To Receive</h2>
+
+        {/* Search bar */}
+        <div style={searchStyles.container}>
+          <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
+          <input
+            type="text"
+            placeholder="Find order"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={searchStyles.input}
+            onFocus={(e) => (e.target.style.borderColor = '#9747FF')}
+            onBlur={(e) => (e.target.style.borderColor = '#ccc')}
+          />
+          <span style={searchStyles.icon}>🔍</span>
+        </div>
+      </OrdersHeader>
+
 
       <OrdersTabs>
         {tabs.map(tab => (
@@ -106,58 +149,54 @@ const ToReceive = () => {
           <TableRow>
             <TableHeader>Customer</TableHeader>
             <TableHeader>Address</TableHeader>
-            <TableHeader>Order Date</TableHeader>
+            <TableHeader>Shipped Date</TableHeader>
             <TableHeader>Product</TableHeader>
             <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Colors</TableHeader>
+            <TableHeader>Amount</TableHeader> 
             <TableHeader>Sizes</TableHeader>
             <TableHeader>Status</TableHeader>
           </TableRow>
         </TableHead>
-       <tbody>
-        {orders.length > 0 ? (
-          orders.flatMap(order =>
-            order.items.map(item => (
-              <TableRow key={`${order.id}-${item.id}`}>
-                <TableData>{order.name}</TableData>
-                <TableData>{order.address || '-'}</TableData>
-                <TableData>{order.createdAt?.toDate().toLocaleString() || '-'}</TableData>
-                <TableData>{item.productName}</TableData>
-                <TableData>{item.quantity}</TableData>
-                <TableData>₱{item.price}</TableData>
-                <TableData>{item.color || '-'}</TableData>
-                <TableData>{item.size || '-'}</TableData>
-                <TableData>
-                  <button
-                    style={{
-                      backgroundColor: '#007bff', // bright blue
-                      color: '#fff',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      fontWeight: 'bold',
-                      fontSize: '0.9rem',
-                      display: 'inline-block',
-                      border: 'none',
-                      cursor: 'default', // not clickable
-                    }}
-                    disabled
-                  >
-                    To Receive
-                  </button>
-                </TableData>
-
-              </TableRow>
-            ))
-          )
-        ) : (
-          <TableRow>
-            <TableData colSpan="9" style={{ textAlign: 'center', padding: '20px' }}>
-              📦 No "To Receive" orders found
-            </TableData>
-          </TableRow>
-        )}
-      </tbody>
+        <tbody>
+          {filteredOrders.length > 0 ? (
+            filteredOrders.flatMap(order =>
+              order.items.map(item => (
+                <TableRow key={`${order.id}-${item.id}`}>
+                  <TableData>{order.name}</TableData>
+                  <TableData>{order.address || '-'}</TableData>
+                  <TableData>{order.shippedAt?.toDate().toLocaleString() || '-'}</TableData>
+                  <TableData>{item.productName}</TableData>
+                  <TableData>{item.quantity}</TableData>
+                  <TableData>₱{item.price}</TableData>
+                  <TableData>{item.size || '-'}</TableData>
+                  <TableData>
+                    <button
+                      style={{
+                        backgroundColor: '#007bff',
+                        color: '#fff',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontWeight: 'bold',
+                        fontSize: '0.9rem',
+                        cursor: 'default',
+                        border: 'none',
+                      }}
+                      disabled
+                    >
+                      To Receive
+                    </button>
+                  </TableData>
+                </TableRow>
+              ))
+            )
+          ) : (
+            <TableRow>
+              <TableData colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>
+                📦 No "To Receive" orders found
+              </TableData>
+            </TableRow>
+          )}
+        </tbody>
 
       </OrdersTable>
     </OrdersContainer>
