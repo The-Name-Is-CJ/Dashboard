@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
@@ -11,31 +11,74 @@ const DashLogin = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [adminEmails, setAdminEmails] = useState([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchAdmins = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "admins"));
+        const admins = querySnapshot.docs.flatMap(doc => {
+          const data = doc.data();
+          return [
+            { email: data.mainAdmin, role: "Main Admin" },
+            { email: data.subAdmin1, role: "Admin 1" },
+            { email: data.subAdmin2, role: "Admin 2" },
+            { email: data.subAdmin3, role: "Admin 3" },
+          ].filter(admin => admin.email); // only include valid ones
+        });
+        setAdminEmails(admins);
+      } catch (err) {
+        console.error("Error fetching admins:", err);
+      }
+    };
+    fetchAdmins();
+  }, []);
+
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setErrorMsg("");
+
     try {
+      // Sign in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      if (user.email !== "angakingkasaguatanayyy@hindipoate.com") {
+      // ✅ Identify role from fetched admins
+      const matchedAdmin = adminEmails.find(a => a.email === user.email);
+
+      if (!matchedAdmin) {
         setErrorMsg("Unauthorized user.");
         return;
       }
 
+      // ✅ Generate unique logID
+      const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      // ✅ Log activity with role and logID
       await addDoc(collection(db, "recentActivityLogs"), {
+        logID: logID,
         action: "logged in",
         userEmail: user.email,
+        role: matchedAdmin.role,
         timestamp: serverTimestamp(),
       });
 
       navigate("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-      setErrorMsg("Invalid email or password.");
+
+      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+        setErrorMsg("Invalid email or password.");
+      } else if (error.code === "auth/invalid-email") {
+        setErrorMsg("Email format is invalid.");
+      } else {
+        setErrorMsg("Login failed. Check console for details.");
+      }
     }
   };
+
 
   return (
     <div className="login-page">

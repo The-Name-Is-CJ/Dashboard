@@ -77,7 +77,7 @@ const Sidebar = () => {
       </NavItem>
 
       <NavItem to="/profile">
-        <FaUser /> Profile
+        <FaUser /> Admin Management
       </NavItem>
 
       <NavItem to="/logout">

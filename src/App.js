@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db} from './firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import DashLogin from './frame/DashLogin';
 import Products from './frame/Products';
 import Sidebar from './components/Sidebar';
@@ -20,18 +21,34 @@ import ToReceive from './frame/ToReceive';
 import Cancelled from './frame/Cancelled';
 import Complete from './frame/Complete';
 
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-
-  const allowedAdminEmail = 'angakingkasaguatanayyy@hindipoate.com';
+  const [adminEmails, setAdminEmails] = useState([]);
 
   useEffect(() => {
-    const splashTimer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2500);
-    return () => clearTimeout(splashTimer);
+    const fetchAdmins = async () => {
+      const querySnapshot = await getDocs(collection(db, "admins"));
+      const emails = querySnapshot.docs.flatMap(doc => {
+        const data = doc.data();
+        return [
+          data.mainAdmin,
+          data.subAdmin1,
+          data.subAdmin2,
+          data.subAdmin3
+        ].filter(Boolean); // removes empty values
+      });
+      setAdminEmails(emails);
+    };
+    fetchAdmins();
+  }, []);
+
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2000); 
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -42,42 +59,40 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  if (loading || showSplash) {
-    return <SplashScreen />;
-  }
+  if (loading || showSplash) return <SplashScreen />;
 
   return (
-    <Router>
-      {user && user.email === allowedAdminEmail ? (
-        <div style={{ display: 'flex' }}>
-          <Sidebar />
-          <div style={{ marginLeft: '250px', padding: '20px', flex: 1 }}>
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/inventory" element={<Products />} />
-
-              {/* Orders and its screens */}
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/orders/toship" element={<ToShip />} />
-              <Route path="/orders/toreceive" element={<ToReceive />} />
-              <Route path="/orders/cancelled" element={<Cancelled />} />
-              <Route path="/orders/complete" element={<Complete />} />
-
-              <Route path="/chat" element={<ChatSupport />} />
-              <Route path="/reviews" element={<Reviews />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/logout" element={<Logout />} />
-            </Routes>
-          </div>
+  <Router>
+   
+    {user && adminEmails.includes(user.email) ? (
+      <div style={{ display: 'flex' }}>
+        <Sidebar />
+        <div style={{ marginLeft: '250px', padding: '20px', flex: 1 }}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/inventory" element={<Products />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/toship" element={<ToShip />} />
+            <Route path="/orders/toreceive" element={<ToReceive />} />
+            <Route path="/orders/cancelled" element={<Cancelled />} />
+            <Route path="/orders/complete" element={<Complete />} />
+            <Route path="/chat" element={<ChatSupport />} />
+            <Route path="/reviews" element={<Reviews />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/logout" element={<Logout />} />
+          </Routes>
         </div>
-      ) : (
-        <Routes>
-          <Route path="*" element={<DashLogin />} />
-        </Routes>
-      )}
-    </Router>
-  );
+      </div>
+    ) : (
+      <Routes>
+        <Route path="*" element={<DashLogin />} />
+      </Routes>
+    )}
+  </Router>
+);
+
 }
+
 
 export default App;

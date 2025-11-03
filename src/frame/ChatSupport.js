@@ -326,10 +326,13 @@ const ChatSupport = () => {
     }
   }, [selectedConversation, allMessages]);
 
+  const messageId = `MID-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
   const handleSend = async e => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConvId) return;
     await addDoc(collection(db, 'chatMessages'), {
+      messageId: messageId, 
       userId: selectedConvId,
       username: selectedConversation.username,
       text: newMessage.trim(),

@@ -12,8 +12,8 @@ import {
   TableData,
   StatusButton,
 } from '../components/orderstyle';
-import { collection, query, onSnapshot, doc, deleteDoc, setDoc, orderBy, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, onSnapshot, doc, deleteDoc, setDoc, orderBy, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { db,  auth } from '../firebase';
 
 // Modal styles
 const modalStyles = {
@@ -102,12 +102,39 @@ const ConfirmationModal = ({ visible, onConfirm, onCancel }) => {
   );
 };
 
+
+
 const Orders = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [role, setRole] = useState("Unknown");
+  const user = auth.currentUser;
+
+useEffect(() => {
+  const fetchRole = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'admins'));
+      let foundRole = "Unknown";
+
+      querySnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.mainAdmin === user?.email) foundRole = "Main Admin";
+        else if (data.subAdmin1 === user?.email) foundRole = "Admin 1";
+        else if (data.subAdmin2 === user?.email) foundRole = "Admin 2";
+        else if (data.subAdmin3 === user?.email) foundRole = "Admin 3";
+      });
+
+      setRole(foundRole);
+    } catch (err) {
+      console.error("Error fetching role:", err);
+    }
+  };
+
+  if (user?.email) fetchRole();
+}, [user]);
 
 
   useEffect(() => {
@@ -158,11 +185,13 @@ const Orders = () => {
     };
   const displayedOrders = filterOrders();
 
-  const filteredOrders = displayedOrders.filter(order =>
+ const filteredOrders = displayedOrders
+  .filter(order => order.orderId) // ✅ skip documents with no orderId
+  .filter(order =>
     order.orderId.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  
+
 
   const handleStatusClick = (orderId) => {
     setSelectedOrderId(orderId);
@@ -203,6 +232,15 @@ const Orders = () => {
           read: false,
         });
 
+      const logsRef = collection(db, "recentActivityLogs");
+        await addDoc(logsRef, {
+          logID: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          action: `Order (${orderToMove.orderId}) is packed`,
+          role: role,
+          userEmail: user?.email || "Unknown user",
+          timestamp: serverTimestamp(),
+        });
+
       setModalVisible(false);
       setSelectedOrderId(null);
     } catch (err) {
@@ -222,8 +260,7 @@ const Orders = () => {
       <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>Orders</h2>
 
-       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        
+       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}> 
           <div style={searchStyles.container}> 
             <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
             <input

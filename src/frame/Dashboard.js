@@ -204,6 +204,24 @@ const ScaleBox = styled.div`
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 `;
 
+const ModalOverlay = styled.div`
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+`;
+const ModalBox = styled.div`
+  background: #fff; padding: 25px; border-radius: 12px;
+  text-align: center; width: 300px;
+`;
+const ModalButtons = styled.div`display: flex; justify-content: space-around; margin-top: 1rem;`;
+const ModalButton = styled.button`
+  padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+  font-weight: bold;
+  background: ${p => (p.cancel ? '#ccc' : '#9747FF')};
+  color: ${p => (p.cancel ? '#000' : '#fff')};
+  &:hover { opacity: 0.8; }
+`;
 
 
 const Dashboard = () => {
@@ -214,6 +232,9 @@ const Dashboard = () => {
   const [averageRating, setAverageRating] = useState(0);
   const [showAllLogs, setShowAllLogs] = useState(false); 
   const [logSearchTerm, setLogSearchTerm] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [confirmAction, setConfirmAction] = useState(() => () => {});
 
   const getTotalStock = (stock) => {
   if (!stock) return 0;
@@ -295,22 +316,21 @@ const Dashboard = () => {
 
     // Convert timestamp to string with month names (e.g., "Sep 2, 2025, 10:15:00 AM")
     let timestampStr = '';
-    if (log.timestamp?.toDate) {
-      const date = new Date(log.timestamp.toDate());
-      timestampStr = date.toLocaleString('en-US', {
-        month: 'long',    // full month name: "September"
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-      }).toLowerCase();
-    }
+  if (log.timestamp?.toDate) {
+    const date = new Date(log.timestamp.toDate());
+    // Build a simpler, normalized string for searching
+    timestampStr =
+      `${date.toLocaleString('en-US', {
+        month: 'long',
+      })} ${date.getDate()}, ${date.getFullYear()}`.toLowerCase();
+  }
 
-    const dateMatch = timestampStr.includes(term);
+  const dateMatch =
+    timestampStr.includes(term) ||
+    new Date(log.timestamp?.toDate()).toISOString().split('T')[0].includes(term);
 
-    return actionMatch || productMatch || dateMatch;
-  });
+      return actionMatch || productMatch || dateMatch;
+    });
 
   // Already in your code:
   const logDates = [...new Set(logs.map(log => {
@@ -333,28 +353,30 @@ const Dashboard = () => {
     : filteredLogs; // fallback to original filtered logs
 
 
-
-  const toggleLog = id => {
-    setLogs(prev =>
-      prev.map(log =>
-        log.id === id ? { ...log, expanded: !log.expanded } : log
-      )
-    );
-  };
-
-  const handleDeleteLog = async id => {
+  const handleDeleteLog = (id) => {
+  setModalMessage('Delete this log permanently?');
+  setConfirmAction(() => async () => {
     await deleteDoc(doc(db, 'recentActivityLogs', id));
     setLogs(prev => prev.filter(log => log.id !== id));
-  };
+    setModalVisible(false);
+  });
+  setModalVisible(true);
+};
 
-  const handleDeleteAllLogs = async () => {
-    const snapshot = await getDocs(collection(db, 'recentActivityLogs'));
-    const deletions = snapshot.docs.map(d => deleteDoc(doc(db, 'recentActivityLogs', d.id)));
-    await Promise.all(deletions);
+const handleDeleteAllLogs = () => {
+  setModalMessage('Delete ALL logs permanently?');
+  setConfirmAction(() => async () => {
+    const snap = await getDocs(collection(db, 'recentActivityLogs'));
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'recentActivityLogs', d.id))));
     setLogs([]);
-  };
+    setModalVisible(false);
+  });
+  setModalVisible(true);
+};
 
-  const avg = parseFloat(averageRating);
+const toggleLog = id =>
+  setLogs(prev => prev.map(l => l.id === id ? { ...l, expanded: !l.expanded } : l));
+const avg = parseFloat(averageRating);
 
   return (
     <Container>
@@ -430,12 +452,13 @@ const Dashboard = () => {
 
       <LogsContainer>
         <LogsHeader>
-          <LogsTitle>Activity Logs</LogsTitle>
+          <LogsTitle>Admin activity Logs</LogsTitle>
           
           <div style={{ position: 'relative', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '16px', color: '#666' }}>(ex.January 1,2025 or 2025-01-01)</span>
             <input
               type="text"
-              placeholder="Search the log data..."
+              placeholder="Search the log date..."
               value={logSearchTerm}
               onChange={e => setLogSearchTerm(e.target.value)}
               style={{
@@ -502,7 +525,7 @@ const Dashboard = () => {
                         <DropdownButton onClick={() => handleDeleteLog(log.id)}>
                           <FaTrash />
                         </DropdownButton>
-                      </LogItem>
+                      </LogItem> 
                       {log.expanded && log.details && (
                         <LogDetails>➤ {log.details}</LogDetails>
                       )}
@@ -520,6 +543,20 @@ const Dashboard = () => {
           )}
 
       </LogsContainer>
+
+        {/* Confirmation Modal */}
+      {modalVisible && (
+        <ModalOverlay>
+          <ModalBox>
+            <p style={{ fontSize: '16px', marginBottom: '15px' }}>{modalMessage}</p>
+            <ModalButtons>
+              <ModalButton onClick={confirmAction}>Yes</ModalButton>
+              <ModalButton cancel onClick={() => setModalVisible(false)}>No</ModalButton>
+            </ModalButtons>
+          </ModalBox>
+        </ModalOverlay>
+      )}
+      
     </Container>
   );
 };

@@ -20,9 +20,10 @@ import {
   where, 
   addDoc, 
   deleteDoc, 
-  doc 
+  doc,
+  serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db,auth } from '../firebase';
 
 // Search bar styles
 const searchStyles = {
@@ -56,6 +57,32 @@ const ToShip = () => {
   const [orders, setOrders] = useState([]);
   const [confirmOrder, setConfirmOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [role, setRole] = useState('Unknown');
+  const user = auth.currentUser;
+
+  // 🔹 Fetch admin role
+  useEffect(() => {
+    const fetchRole = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'admins'));
+        let foundRole = 'Unknown';
+
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.mainAdmin === user?.email) foundRole = 'Main Admin';
+          else if (data.subAdmin1 === user?.email) foundRole = 'Admin 1';
+          else if (data.subAdmin2 === user?.email) foundRole = 'Admin 2';
+          else if (data.subAdmin3 === user?.email) foundRole = 'Admin 3';
+        });
+
+        setRole(foundRole);
+      } catch (err) {
+        console.error('Error fetching role:', err);
+      }
+    };
+
+    if (user?.email) fetchRole();
+  }, [user]);
 
   // Filter orders and their items
   const filteredOrders = orders
@@ -168,6 +195,15 @@ const ToShip = () => {
         orderId: order.orderId,
         timestamp: new Date(),
         read: false,
+      });
+
+      const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      await addDoc(collection(db, 'recentActivityLogs'), {
+        logID,
+        action: `Order ${order.orderId} is shipped`,
+        userEmail: user?.email || 'Unknown',
+        role,
+        timestamp: serverTimestamp(),
       });
 
       setConfirmOrder(null);

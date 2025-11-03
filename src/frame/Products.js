@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   collection,
   getDocs,
@@ -24,8 +24,19 @@ const SIZE_OPTIONS = ['S', 'M', 'L', 'XL'];
 
 const Products = () => {
   const [products, setProducts] = useState([]);
+  const user = auth.currentUser;
+  const [role, setRole] = useState(localStorage.getItem("role") || "Unknown");
+ 
 
-  // Add product modal
+  const generateLogID = () => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `LOG-${timestamp}-${random}`;
+  };
+
+  
+
+
   const [addProduct, setAddProduct] = useState(false);
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -48,6 +59,31 @@ const Products = () => {
     Top: ['T-Shirt', 'Longsleeves'],
     Bottom: ['Pants', 'Shorts'],
   };
+
+  useEffect(() => {
+    const fetchRole = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'admins'));
+        let foundRole = "Unknown";
+
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.mainAdmin === user?.email) foundRole = "Main Admin";
+          else if (data.subAdmin1 === user?.email) foundRole = "Admin 1";
+          else if (data.subAdmin2 === user?.email) foundRole = "Admin 2";
+          else if (data.subAdmin3 === user?.email) foundRole = "Admin 3";
+        });
+
+        setRole(foundRole);
+      } catch (err) {
+        console.error("Error fetching role:", err);
+      }
+    };
+
+    if (user?.email) {
+      fetchRole();
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchProducts();
@@ -143,10 +179,14 @@ const Products = () => {
       });
 
       await addDoc(collection(db, 'recentActivityLogs'), {
-        action: 'added product',
+        logID: generateLogID(), 
+        userEmail: user?.email || "Unknown user",
+        role: role,
+        action: 'Add product',
         productName: newProduct.name,
         timestamp: serverTimestamp(),
       });
+
 
       fetchProducts();
       setAddProduct(false);
@@ -191,12 +231,16 @@ const Products = () => {
         sizes: SIZE_OPTIONS,
       });
 
-      await addDoc(collection(db, 'recentActivityLogs'), {
-        action: 'edited product',
-        productId: editProduct.id,
-        productName: editProduct.name,
-        timestamp: serverTimestamp(),
-      });
+     await addDoc(collection(db, 'recentActivityLogs'), {
+      logID: generateLogID(),
+      userEmail: user?.email || "Unknown user",
+      role: role,
+      action: 'Edit product',
+      productId: editProduct.id,
+      productName: editProduct.name,
+      timestamp: serverTimestamp(),
+    });
+
 
       fetchProducts();
       setEditProduct(null);
@@ -213,11 +257,15 @@ const Products = () => {
       setDeleteConfirm({ show: false, id: null });
 
       await addDoc(collection(db, 'recentActivityLogs'), {
+        logID: generateLogID(),
+        userEmail: user?.email || "Unknown user",
+        role: role,
         action: 'deleted product',
         productId: deleteConfirm.id,
         productName: productToDelete ? productToDelete.name : '',
         timestamp: serverTimestamp(),
       });
+
 
       setProductToDelete(null);
     } catch (error) {
