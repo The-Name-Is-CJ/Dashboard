@@ -175,7 +175,8 @@ const Products = () => {
         categorySub: newProductCategory.sub,
         sizes: SIZE_OPTIONS,
         totalStock: totalStock,
-        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        editedAt: null,
       });
 
       await addDoc(collection(db, 'recentActivityLogs'), {
@@ -218,17 +219,18 @@ const Products = () => {
       const totalStock = Object.values(updatedStock).reduce((sum, val) => sum + val, 0);
 
       await updateDoc(productRef, {
-        name: editProduct.name,
-        price: Number(editProduct.price),
-        delivery: formatDelivery(editProduct.delivery),
-        imageUrl: editProduct.imageUrl || '',
-        arUrl: editProduct.arUrl || '',
-        description: editProduct.description || '',
-        stock: updatedStock,
-        totalStock: totalStock,
-        categoryMain: editProduct.categoryMain,
-        categorySub: editProduct.categorySub,
-        sizes: SIZE_OPTIONS,
+      name: editProduct.name,
+      price: Number(editProduct.price),
+      delivery: formatDelivery(editProduct.delivery),
+      imageUrl: editProduct.imageUrl || '',
+      arUrl: editProduct.arUrl || '',
+      description: editProduct.description || '',
+      stock: updatedStock,
+      totalStock: totalStock,
+      categoryMain: editProduct.categoryMain,
+      categorySub: editProduct.categorySub,
+      sizes: SIZE_OPTIONS,
+      editedAt: serverTimestamp(),
       });
 
      await addDoc(collection(db, 'recentActivityLogs'), {
