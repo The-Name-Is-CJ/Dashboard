@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import {
@@ -145,67 +146,66 @@ const Products = () => {
   };
 
   const handleAddProduct = async () => {
-    if (
-      !newProduct.name ||
-      !newProduct.price ||
-      !newProductCategory.main ||
-      !newProductCategory.sub
-    ) {
-      alert('Please fill in all required fields.');
-      return;
-    }
+  if (
+    !newProduct.name ||
+    !newProduct.price ||
+    !newProductCategory.main ||
+    !newProductCategory.sub
+  ) {
+    alert('Please fill in all required fields.');
+    return;
+  }
 
-    try {
-      const newProductID = generateNextProductID();
-      const stockData = initializeFullStock(newProduct.stock);
-      const totalStock = Object.values(stockData).reduce((sum, val) => sum + val, 0);
+  try {
+    const newProductID = generateNextProductID();
+    const stockData = initializeFullStock(newProduct.stock);
+    const totalStock = Object.values(stockData).reduce((sum, val) => sum + val, 0);
 
-      await addDoc(collection(db, 'products'), {
-        productID: newProductID,
-        name: newProduct.name,
-        price: Number(newProduct.price),
-        delivery: formatDelivery(newProduct.delivery),
-        imageUrl: newProduct.imageUrl || '',
-        arUrl: newProduct.arUrl || '',
-        description: newProduct.description || '',
-        rating: 0,
-        sold: 0,
-        stock: stockData,
-        categoryMain: newProductCategory.main,
-        categorySub: newProductCategory.sub,
-        sizes: SIZE_OPTIONS,
-        totalStock: totalStock,
-        createdAt: serverTimestamp(),
-        editedAt: null,
-      });
+    await addDoc(collection(db, 'products'), {
+      productID: newProductID,
+      productName: newProduct.name, // ✅ fixed here
+      price: Number(newProduct.price),
+      delivery: formatDelivery(newProduct.delivery),
+      imageUrl: newProduct.imageUrl || '',
+      arUrl: newProduct.arUrl || '',
+      description: newProduct.description || '',
+      rating: 0,
+      sold: 0,
+      stock: stockData,
+      categoryMain: newProductCategory.main,
+      categorySub: newProductCategory.sub,
+      sizes: SIZE_OPTIONS,
+      totalStock: totalStock,
+      createdAt: serverTimestamp(),
+      editedAt: null,
+    });
 
-      await addDoc(collection(db, 'recentActivityLogs'), {
-        logID: generateLogID(), 
-        userEmail: user?.email || "Unknown user",
-        role: role,
-        action: 'Add product',
-        productName: newProduct.name,
-        timestamp: serverTimestamp(),
-      });
+    await addDoc(collection(db, 'recentActivityLogs'), {
+      logID: generateLogID(),
+      userEmail: user?.email || 'Unknown user',
+      role: role,
+      action: 'Add product',
+      productName: newProduct.name,
+      timestamp: serverTimestamp(),
+    });
 
-
-      fetchProducts();
-      setAddProduct(false);
-      setNewProduct({
-        name: '',
-        price: '',
-        delivery: '',
-        imageUrl: '',
-        arUrl: '',
-        description: '',
-        stock: { S: 0, M: 0, L: 0, XL: 0 },
-      });
-      setNewProductCategory({ main: '', sub: '' });
-    } catch (error) {
-      console.error('Error adding product:', error);
-      alert('Failed to add product.');
-    }
-  };
+    fetchProducts();
+    setAddProduct(false);
+    setNewProduct({
+      name: '',
+      price: '',
+      delivery: '',
+      imageUrl: '',
+      arUrl: '',
+      description: '',
+      stock: { S: 0, M: 0, L: 0, XL: 0 },
+    });
+    setNewProductCategory({ main: '', sub: '' });
+  } catch (error) {
+    console.error('Error adding product:', error);
+    alert('Failed to add product.');
+  }
+};
 
   const handleSaveEdit = async () => {
     if (!editProduct.name || !editProduct.price || !editProduct.categoryMain || !editProduct.categorySub) {
@@ -219,7 +219,7 @@ const Products = () => {
       const totalStock = Object.values(updatedStock).reduce((sum, val) => sum + val, 0);
 
       await updateDoc(productRef, {
-      name: editProduct.name,
+      productName: editProduct.name,
       price: Number(editProduct.price),
       delivery: formatDelivery(editProduct.delivery),
       imageUrl: editProduct.imageUrl || '',
@@ -363,9 +363,9 @@ const Products = () => {
       <div className="product-grid">
         {products.map(product => (
           <div key={product.id} className="product-card">
-            <img src={product.imageUrl || '/asset/icon.png'} alt={product.name} />
+            <img src={product.imageUrl || '/asset/icon.png'} alt={product.productNamename} />
 
-            <h3>{product.productID ? `${product.productID} - ${product.name}` : product.name}</h3>
+            <h3>{product.productID ? `${product.productID} - ${product.productName}` : product.productNamename}</h3>
             <p>₱{product.price}</p>
             <p>⭐ {product.rating}</p>
             <p>Sold: {formatNumber(product.sold)}</p>
