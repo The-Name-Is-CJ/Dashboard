@@ -10,8 +10,9 @@ import {
   TableRow,
   TableHeader,
   TableData,
+  StatusButton,
 } from '../components/orderstyle';
-import { collection, query, onSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 // Search bar styles
@@ -35,29 +36,69 @@ const Cancelled = () => {
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 🔹 Fetch cancelled orders from Firestore
   useEffect(() => {
     const cancelledRef = collection(db, 'cancelled');
     const q = query(cancelledRef);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedOrders = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(),
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const fetchedOrders = [];
+      const userIds = new Set();
+
+      snapshot.forEach(docSnap => {
+        const orderData = { id: docSnap.id, ...docSnap.data() };
+        fetchedOrders.push(orderData);
+        if (orderData.userId) userIds.add(orderData.userId);
+      });
+
+      if (userIds.size === 0) {
+        setOrders(fetchedOrders);
+        return;
+      }
+
+      // Fetch customer names from shippingLocations
+      const userIdArray = Array.from(userIds);
+      const userMap = {};
+
+      await Promise.all(
+        userIdArray.map(async (uid) => {
+          try {
+            const userDocRef = collection(db, 'users');
+            const userQuery = query(userDocRef, where('userId', '==', uid));
+            const userSnap = await getDocs(userQuery);
+
+            if (!userSnap.empty) {
+              const userData = userSnap.docs[0].data();
+              const shippingName =
+                userData.shippingLocations?.[0]?.name || uid; // fallback
+              userMap[uid] = shippingName;
+            } else {
+              userMap[uid] = uid;
+            }
+          } catch (err) {
+            console.error("Error fetching shipping location:", err);
+            userMap[uid] = uid;
+          }
+        })
+      );
+
+      const ordersWithNames = fetchedOrders.map(order => ({
+        ...order,
+        name: order.name || userMap[order.userId] || order.userId,
       }));
-      setOrders(fetchedOrders);
+
+      setOrders(ordersWithNames);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // 🔹 Filter orders by search term (orderId)
+  // Filter orders by search term
   const filteredOrders = orders
     .map(order => ({
       ...order,
-      items: order.items?.filter(() =>
+      items: order.items.filter(item =>
         order.orderId?.toLowerCase().includes(searchTerm.toLowerCase())
-      ) || [],
+      ),
     }))
     .filter(order => order.items.length > 0);
 
@@ -74,7 +115,7 @@ const Cancelled = () => {
       <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>Cancelled Orders</h2>
 
-        {/* 🔍 Search bar */}
+        {/* Search bar */}
         <div style={searchStyles.container}>
           <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
           <input
@@ -116,15 +157,11 @@ const Cancelled = () => {
         <tbody>
           {filteredOrders.length > 0 ? (
             filteredOrders.flatMap(order =>
-              order.items.map((item, index) => (
-                <TableRow key={`${order.id}-${index}`}>
-                  <TableData>{order.name || '-'}</TableData>
+              order.items.map(item => (
+                <TableRow key={`${order.id}-${item.id}`}>
+                  <TableData>{order.name}</TableData>
                   <TableData>{order.address || '-'}</TableData>
-                  <TableData>
-                    {order.cancelledAt?.toDate
-                      ? order.cancelledAt.toDate().toLocaleString()
-                      : '-'}
-                  </TableData>
+                  <TableData>{order.cancelledAt?.toDate().toLocaleString() || '-'}</TableData>
                   <TableData>{item.productName}</TableData>
                   <TableData>{item.quantity}</TableData>
                   <TableData>₱{item.price}</TableData>
