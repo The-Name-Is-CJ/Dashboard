@@ -428,17 +428,18 @@ const Products = () => {
               }}>
                 <ModalTitle>Add Product</ModalTitle>
                 <Label>Name</Label>
-                <Input value={newProduct.name} placeholder='Enter Product Name' onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
+                <Input value={newProduct.name} placeholder='Enter Product Name' maxLength={50} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} />
                 <Label>Price</Label>
-                <Input type="number" value={newProduct.price} placeholder='Enter Product Price' onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} />
+                <Input type="number" min="1" max="99999" value={newProduct.price} placeholder="Enter Product Price" onChange={e => { let val = e.target.value; if (val.length > 5) val = val.slice(0, 5); setNewProduct({ ...newProduct, price: val }); }} />
                 <Label>Delivery</Label>
-                <Input value={newProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
+                <Input maxLength={10} value={newProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setNewProduct({ ...newProduct, delivery: e.target.value })} />
                 <Label>Image URL</Label>
-                <Input value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
+                <Input maxLength={250} value={newProduct.imageUrl} onChange={e => setNewProduct({ ...newProduct, imageUrl: e.target.value })} />
                 <Label>AR URL/LINK</Label>
-                <Input value={newProduct.arUrl} onChange={e => setNewProduct({ ...newProduct, arUrl: e.target.value })} />
+                <Input maxLength={250} value={newProduct.arUrl} onChange={e => setNewProduct({ ...newProduct, arUrl: e.target.value })} />
                 <Label>Description</Label>
                   <textarea
+                    maxLength={250}
                     value={newProduct.description}
                     placeholder="Enter product description"
                     onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
@@ -552,7 +553,15 @@ const Products = () => {
                             <td>{size}</td>
                             {data ? Object.values(data).map((val, i) => <td key={i}>{val}</td>) : null}
                             <td>
-                              <Input type="number" value={newProduct.stock[size]} onChange={e => setNewProduct({ ...newProduct, stock: { ...newProduct.stock, [size]: e.target.value } })} />
+                              <Input
+                                type="number"
+                                value={newProduct.stock[size]}
+                                onChange={e => {
+                                  let val = e.target.value;
+                                  if (val.length > 10) val = val.slice(0, 10);
+                                  setNewProduct({ ...newProduct, stock: { ...newProduct.stock, [size]: val } });
+                                }}
+                              />
                             </td>
                           </tr>
                         );
@@ -595,19 +604,53 @@ const Products = () => {
                 color: '#000',
                 width: '500px'
               }}>
-                <ModalTitle>Edit Product</ModalTitle>
+               <ModalTitle>Edit Product</ModalTitle>
+
                 <Label>Name</Label>
-                <Input value={editProduct.name} placeholder='Enter Product Name' onChange={e => setEditProduct({ ...editProduct, name: e.target.value })} />
+                <Input
+                  maxLength={50}
+                  value={editProduct.productName}
+                  placeholder="Enter Product Name"
+                  onChange={e => setEditProduct({ ...editProduct, name: e.target.value })}
+                />
+
                 <Label>Price</Label>
-                <Input type="number" value={editProduct.price} placeholder='Enter Product Price' onChange={e => setEditProduct({ ...editProduct, price: e.target.value })} />
+                <Input
+                  type="number"
+                  value={editProduct.price}
+                  placeholder="Enter Product Price"   
+                  onChange={e => {
+                    let val = e.target.value;
+                    if (val.length > 5) val = val.slice(0, 5); // max 5 digits
+                    setEditProduct({ ...editProduct, price: val });
+                  }}
+                />
+
                 <Label>Delivery</Label>
-                <Input value={editProduct.delivery} placeholder='Enter the Delivery Days' onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })} />
+                <Input
+                  maxLength={10}
+                  value={editProduct.delivery}
+                  placeholder="Enter the Delivery Days"
+                  onChange={e => setEditProduct({ ...editProduct, delivery: e.target.value })}
+                />
+
                 <Label>Image URL</Label>
-                <Input value={editProduct.imageUrl} onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })} />
+                <Input
+                  maxLength={250}
+                  value={editProduct.imageUrl}
+                  onChange={e => setEditProduct({ ...editProduct, imageUrl: e.target.value })}
+                />
+
                 <Label>AR URL/LINK</Label>
-                <Input value={editProduct.arUrl} onChange={e => setEditProduct({ ...editProduct, arUrl: e.target.value })} />
+                <Input
+                  maxLength={250}
+                  value={editProduct.arUrl}
+                  onChange={e => setEditProduct({ ...editProduct, arUrl: e.target.value })}
+                />
+
                 <Label>Description</Label>
                 <textarea
+                  maxLength={250}
                   value={editProduct.description || ''}
                   placeholder="Enter product description"
                   onChange={e => setEditProduct({ ...editProduct, description: e.target.value })}
@@ -621,6 +664,7 @@ const Products = () => {
                     marginBottom: '1rem'
                   }}
                 />
+
 
               </div>
 
