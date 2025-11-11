@@ -13,6 +13,7 @@ import { NavLink } from 'react-router-dom';
 
 const { secondary, white, gray } = Colors;
 
+// Sidebar container
 const SidebarContainer = styled.div`
   width: 250px;
   background-color: ${white};
@@ -22,12 +23,28 @@ const SidebarContainer = styled.div`
   position: fixed;
 `;
 
+// Logo with Krona One font
 const Logo = styled.h2`
   color: ${secondary};
-  font-size: 1.75rem;
-  margin-bottom: 3rem;
+  font-family: 'Krona One', sans-serif; /* ✅ Krona One font */
+  font-size: 1.38rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  position: relative;
+  padding-bottom: 25px;
+  &:after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background-color: #ccc; /* subtle line */
+    position: absolute;
+    bottom: 0;
+    left: 0;
+  }
 `;
 
+// Navigation items
 const NavItem = styled(NavLink)`
   display: flex;
   align-items: center;

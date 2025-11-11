@@ -13,13 +13,14 @@ import {
 } from '../components/orderstyle';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { FiSearch } from 'react-icons/fi'; 
 
 // Search bar styles
 const searchStyles = {
   container: { position: 'relative', width: '500px' },
   input: {
     width: '100%',
-    padding: '10px 40px 10px 15px',
+    padding: '10px 40px 10px 15px', // extra padding for icon
     borderRadius: '10px',
     border: '1px solid #ccc',
     boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
@@ -27,8 +28,17 @@ const searchStyles = {
     outline: 'none',
     transition: 'all 0.2s ease-in-out',
   },
-  icon: { position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '16px', color: '#888' },
+  icon: {
+    position: 'absolute',
+    right: '12px',
+    top: '80%',
+    transform: 'translateY(-50%)',
+    fontSize: '18px',
+    color: '#888',
+    pointerEvents: 'none', // allows typing through icon
+  },
 };
+
 
 const Complete = () => {
   const location = useLocation();
@@ -80,7 +90,7 @@ const Complete = () => {
             onFocus={(e) => (e.target.style.borderColor = '#9747FF')}
             onBlur={(e) => (e.target.style.borderColor = '#ccc')}
           />
-          <span style={searchStyles.icon}>🔍</span>
+           <FiSearch style={searchStyles.icon} /> 
         </div>
       </OrdersHeader>
 

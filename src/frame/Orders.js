@@ -12,40 +12,55 @@ import {
   TableData,
   StatusButton,
 } from '../components/orderstyle';
-import { collection, query, onSnapshot, doc, deleteDoc, setDoc, orderBy, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { db,  auth } from '../firebase';
+import {
+  collection,
+  query,
+  onSnapshot,
+  doc,
+  deleteDoc,
+  setDoc,
+  orderBy,
+  addDoc,
+  serverTimestamp,
+  getDocs
+} from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { FiSearch } from 'react-icons/fi'; // ✅ Imported search icon
 
-// Modal styles
-const modalStyles = {
+// ✅ Top-centered popup styles
+const popupStyles = {
   overlay: {
     position: 'fixed',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
     zIndex: 1000,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  modalBox: {
+  popupBox: {
     backgroundColor: '#fff',
-    padding: '25px',
+    padding: '20px 25px',
     borderRadius: '12px',
-    width: '320px',
+    boxShadow: '0 4px 10px rgba(0,0,0,0.25)',
     textAlign: 'center',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+    minWidth: '320px',
   },
   text: {
     fontSize: '16px',
-    marginBottom: '20px',
+    marginBottom: '15px',
+    color: '#333',
   },
   buttonContainer: {
     display: 'flex',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: '12px',
   },
   yesButton: {
     backgroundColor: '#9747FF',
     color: '#fff',
-    padding: '10px 20px',
+    padding: '8px 20px',
     borderRadius: '8px',
     border: 'none',
     cursor: 'pointer',
@@ -53,21 +68,36 @@ const modalStyles = {
   noButton: {
     backgroundColor: '#ccc',
     color: '#000',
-    padding: '10px 20px',
+    padding: '8px 20px',
     borderRadius: '8px',
     border: 'none',
     cursor: 'pointer',
   },
 };
+
+// ✅ Top popup component
+const TopPopup = ({ visible, message, onConfirm, onCancel }) => {
+  if (!visible) return null;
+
+  return (
+    <div style={popupStyles.overlay}>
+      <div style={popupStyles.popupBox}>
+        <p style={popupStyles.text}>{message}</p>
+        <div style={popupStyles.buttonContainer}>
+          <button onClick={onConfirm} style={popupStyles.yesButton}>Yes</button>
+          <button onClick={onCancel} style={popupStyles.noButton}>No</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Search bar styles
 const searchStyles = {
-  container: {
-    position: 'relative',
-    width: '500px',
-  },
+  container: { position: 'relative', width: '500px' },
   input: {
     width: '100%',
-    padding: '10px 40px 10px 15px', // extra space for icon
+    padding: '10px 40px 10px 15px', // extra padding for icon
     borderRadius: '10px',
     border: '1px solid #ccc',
     boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
@@ -78,87 +108,67 @@ const searchStyles = {
   icon: {
     position: 'absolute',
     right: '12px',
-    top: '50%',
+    top: '80%',
     transform: 'translateY(-50%)',
-    fontSize: '16px',
+    fontSize: '18px',
     color: '#888',
+    pointerEvents: 'none', // allows typing through icon
   },
 };
-
-// Modal component placed right below the style
-const ConfirmationModal = ({ visible, onConfirm, onCancel }) => {
-  if (!visible) return null;
-
-  return (
-    <div style={modalStyles.overlay}>
-      <div style={modalStyles.modalBox}>
-        <p style={modalStyles.text}>Is the product packed and ready to ship?</p>
-        <div style={modalStyles.buttonContainer}>
-          <button onClick={onConfirm} style={modalStyles.yesButton}>Yes</button>
-          <button onClick={onCancel} style={modalStyles.noButton}>No</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
 
 const Orders = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [popupVisible, setPopupVisible] = useState(false);
+  const [popupMessage, setPopupMessage] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [role, setRole] = useState("Unknown");
+  const [role, setRole] = useState('Unknown');
   const user = auth.currentUser;
 
-useEffect(() => {
-  const fetchRole = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'admins'));
-      let foundRole = "Unknown";
-
-      querySnapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data.mainAdmin === user?.email) foundRole = "Main Admin";
-        else if (data.subAdmin1 === user?.email) foundRole = "Admin 1";
-        else if (data.subAdmin2 === user?.email) foundRole = "Admin 2";
-        else if (data.subAdmin3 === user?.email) foundRole = "Admin 3";
-      });
-
-      setRole(foundRole);
-    } catch (err) {
-      console.error("Error fetching role:", err);
-    }
-  };
-
-  if (user?.email) fetchRole();
-}, [user]);
-
-
+  // Fetch admin role
   useEffect(() => {
-  const ordersRef = collection(db, 'orders');
-  const q = query(ordersRef, orderBy('createdAt', 'asc'));
+    const fetchRole = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'admins'));
+        let foundRole = 'Unknown';
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    try {
-      const fetchedOrders = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data(), // name is already included in the order doc
-      }));
+        querySnapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.mainAdmin === user?.email) foundRole = 'Main Admin';
+          else if (data.subAdmin1 === user?.email) foundRole = 'Admin 1';
+          else if (data.subAdmin2 === user?.email) foundRole = 'Admin 2';
+          else if (data.subAdmin3 === user?.email) foundRole = 'Admin 3';
+        });
 
-      setOrders(fetchedOrders);
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      const fallback = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      setOrders(fallback);
-    }
-  });
+        setRole(foundRole);
+      } catch (err) {
+        console.error('Error fetching role:', err);
+      }
+    };
 
-  return () => unsubscribe();
-}, []);
+    if (user?.email) fetchRole();
+  }, [user]);
 
+  // Fetch orders
+  useEffect(() => {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, orderBy('createdAt', 'asc'));
+
+    const unsubscribe = onSnapshot(q, snapshot => {
+      try {
+        const fetchedOrders = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        setOrders(fetchedOrders);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const tabs = [
     { name: 'Orders', path: '/orders' },
@@ -169,89 +179,73 @@ useEffect(() => {
   ];
 
   const filterOrders = () => {
-      const path = location.pathname;
-      switch (path) {
-        case '/orders/toship':
-          return orders.filter(order => order.status === 'To Ship');
-        case '/orders/toreceive':
-          return orders.filter(order => order.status === 'To Receive');
-        case '/orders/cancelled':
-          return orders.filter(order => order.status === 'Cancelled');
-        case '/orders/complete':
-          return orders.filter(order => order.status === 'Complete');
-        default:
-          return orders;
-      }
-    };
+    const path = location.pathname;
+    switch (path) {
+      case '/orders/toship': return orders.filter(o => o.status === 'To Ship');
+      case '/orders/toreceive': return orders.filter(o => o.status === 'To Receive');
+      case '/orders/cancelled': return orders.filter(o => o.status === 'Cancelled');
+      case '/orders/complete': return orders.filter(o => o.status === 'Complete');
+      default: return orders;
+    }
+  };
   const displayedOrders = filterOrders();
-
- const filteredOrders = displayedOrders
-  .filter(order => order.orderId) // ✅ skip documents with no orderId
-  .filter(order =>
-    order.orderId.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-
+  const filteredOrders = displayedOrders
+    .filter(order => order.orderId)
+    .filter(order =>
+      order.orderId.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   const handleStatusClick = (orderId) => {
     setSelectedOrderId(orderId);
-    setModalVisible(true);
+    setPopupMessage('Is the product packed and ready to ship?');
+    setPopupVisible(true);
   };
 
   const handleConfirm = async () => {
     try {
-      const orderToMove = orders.find(order => order.id === selectedOrderId);
+      const orderToMove = orders.find(o => o.id === selectedOrderId);
       if (!orderToMove) return;
 
       const { id, ...orderDataWithoutId } = orderToMove;
-
       const updatedOrder = {
         ...orderDataWithoutId,
-        status: "To Ship",
+        status: 'To Ship',
         packedAt: new Date(),
         toshipID: `TS-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        items: orderToMove.items.map(item => ({
-          ...item, 
-        })),
+        items: orderToMove.items.map(item => ({ ...item })),
       };
 
-      
-      await setDoc(doc(db, "toShip", orderToMove.id), updatedOrder);
+      await setDoc(doc(db, 'toShip', orderToMove.id), updatedOrder);
+      await deleteDoc(doc(db, 'orders', orderToMove.id));
 
-      // Remove from "orders" collection
-      await deleteDoc(doc(db, "orders", orderToMove.id));
+      await addDoc(collection(db, 'notifications'), {
+        notifID: `NTP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        userId: orderToMove.userId,
+        title: 'Order Packed',
+        message: 'Your order has been packed and is waiting to be shipped.',
+        orderId: orderToMove.orderId,
+        timestamp: new Date(),
+        read: false,
+      });
 
-      const notificationsRef = collection(db, "notifications");
-        await addDoc(notificationsRef, {
-          notifID: `NTP-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          userId: orderToMove.userId,
-          title: "Order Packed",
-          message: "Your order has been packed and is waiting to be shipped.",
-          orderId: orderToMove.orderId,
-          timestamp: new Date(),
-          read: false,
-        });
+      await addDoc(collection(db, 'recentActivityLogs'), {
+        logID: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        action: `Order (${orderToMove.orderId}) is packed`,
+        role: role,
+        userEmail: user?.email || 'Unknown user',
+        timestamp: serverTimestamp(),
+      });
 
-      const logsRef = collection(db, "recentActivityLogs");
-        await addDoc(logsRef, {
-          logID: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          action: `Order (${orderToMove.orderId}) is packed`,
-          role: role,
-          userEmail: user?.email || "Unknown user",
-          timestamp: serverTimestamp(),
-        });
-
-      setModalVisible(false);
+      setPopupVisible(false);
       setSelectedOrderId(null);
     } catch (err) {
-      console.error("Error moving order to toShip:", err);
-      setModalVisible(false);
+      console.error('Error moving order to toShip:', err);
+      setPopupVisible(false);
     }
   };
 
-
   const handleCancel = () => {
-    setModalVisible(false);
+    setPopupVisible(false);
     setSelectedOrderId(null);
   };
 
@@ -259,9 +253,8 @@ useEffect(() => {
     <OrdersContainer>
       <OrdersHeader style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ margin: 0 }}>Orders</h2>
-
-       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}> 
-          <div style={searchStyles.container}> 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={searchStyles.container}>
             <span style={{ fontSize: '18px', color: '#666' }}>Use the orderID:</span>
             <input
               type="text"
@@ -272,13 +265,10 @@ useEffect(() => {
               onFocus={(e) => (e.target.style.borderColor = '#9747FF')}
               onBlur={(e) => (e.target.style.borderColor = '#ccc')}
             />
-            <span style={searchStyles.icon}>🔍</span>
-          </div> 
+            <FiSearch style={searchStyles.icon} /> {/* ✅ Search icon inside input */}
+          </div>
         </div>
-
       </OrdersHeader>
-
-
 
       <OrdersTabs>
         {tabs.map(tab => (
@@ -298,12 +288,12 @@ useEffect(() => {
             <TableHeader>Order Date</TableHeader>
             <TableHeader>Product</TableHeader>
             <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader> 
+            <TableHeader>Amount</TableHeader>
             <TableHeader>Sizes</TableHeader>
             <TableHeader>Status</TableHeader>
           </TableRow>
         </TableHead>
-       <tbody>
+        <tbody>
           {filteredOrders.map(order =>
             order.items.map(item => (
               <TableRow key={item.id}>
@@ -312,7 +302,7 @@ useEffect(() => {
                 <TableData>{order.createdAt?.toDate().toLocaleString()}</TableData>
                 <TableData>{item.productName}</TableData>
                 <TableData>{item.quantity}</TableData>
-                <TableData>₱{order.total}</TableData> 
+                <TableData>₱{order.total}</TableData>
                 <TableData>{item.size || '-'}</TableData>
                 <TableData>
                   {(order.status === 'Pending' || order.status === 'To Ship') ? (
@@ -327,11 +317,12 @@ useEffect(() => {
             ))
           )}
         </tbody>
-
       </OrdersTable>
 
-      <ConfirmationModal
-        visible={modalVisible}
+      {/* ✅ Top popup replaces all old modals */}
+      <TopPopup
+        visible={popupVisible}
+        message={popupMessage}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
