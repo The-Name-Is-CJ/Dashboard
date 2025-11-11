@@ -11,7 +11,7 @@ import {
   collection,
   getDocs
 } from 'firebase/firestore';
-
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const Profile = () => {
   const [admins, setAdmins] = useState({
@@ -27,14 +27,14 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentAdminKey, setCurrentAdminKey] = useState('');
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [adminDocId, setAdminDocId] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pendingAdminKey, setPendingAdminKey] = useState('');
   const [confirmAction, setConfirmAction] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
+  const [focusedField, setFocusedField] = useState('');
 
   const adminMap = {
     mainAdmin: { nameField: 'mainAdminName', emailField: 'mainAdmin' },
@@ -78,7 +78,7 @@ const Profile = () => {
 
   const handleCloseModal = () => {
     setModalOpen(false);
-    setFormData({ name: '', email: '', password: '' });
+    setFormData({ name: '', email: '', password: '', confirmPassword: '' });
   };
 
   const handleConfirmYes = () => {
@@ -89,7 +89,8 @@ const Profile = () => {
       setFormData({
         name: '',
         email: '',
-        password: ''
+        password: '',
+        confirmPassword: ''
       });
       setModalOpen(true);
     } else if (confirmAction === 'remove') {
@@ -104,7 +105,7 @@ const Profile = () => {
     setPendingAdminKey('');
   };
 
-   const handleAddAdmin = async (email, password, name, key) => {
+  const handleAddAdmin = async (email, password, name, key) => {
     const { nameField, emailField } = adminMap[key];
     const adminRef = doc(db, "admins", adminDocId);
 
@@ -197,14 +198,12 @@ const Profile = () => {
               <h3 style={{ marginBottom: "0.8rem" }}>{label}</h3>
               <p><strong>Name:</strong> {adminName || "— No Admin —"}</p>
 
-              {/* Show Add button if no admin */}
               {!adminName && (
-                <button style={buttonStyle} onClick={() => handleOpenModal(key, 'add')}>
+                <button style={{ ...buttonStyle, backgroundColor: '#7C4DFF' }} onClick={() => handleOpenModal(key, 'add')}>
                   Add
                 </button>
               )}
 
-              {/* Show Remove button if admin exists */}
               {key !== "mainAdmin" && adminName && (
                 <button
                   style={removeBtn}
@@ -237,92 +236,114 @@ const Profile = () => {
             <div style={{
               display: 'flex',
               justifyContent: 'flex-end',
-              gap: '0.5rem',
+              gap: '1rem',
               marginTop: '1rem'
             }}>
-              <button style={buttonStyle} onClick={handleConfirmYes}>Yes</button>
-              <button style={cancelBtn} onClick={handleConfirmNo}>No</button>
+              <button
+                style={{ ...buttonStyle, backgroundColor: '#7C4DFF', color: '#fff' }}
+                onClick={handleConfirmYes}
+              >
+                Yes
+              </button>
+              <button
+                style={{ ...buttonStyle, backgroundColor: '#6c6c6c', color: '#fff' }}
+                onClick={handleConfirmNo}
+              >
+                No
+              </button>
             </div>
           </div>
         </div>
       )}
 
-     {modalOpen && (
-      <div style={modalOverlayStyle}>
-        <div style={modalStyle}>
-          <h3>Add Admin</h3>
-          <label>Name:</label>
-          <input
-            style={inputStyle}
-            value={formData.name}
-            onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-          />
+      {/* Add Admin Modal */}
+      {modalOpen && (
+        <div style={modalOverlayStyle}>
+          <div style={modalStyle}>
+            <h3>Add Admin</h3>
 
-          <label>Email:</label>
-          <input
-            style={inputStyle}
-            value={formData.email}
-            onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-          />
-
-          {/* Password Field with Toggle */}
-          <label>Password:</label>
-          <div style={passwordContainer}>
+            <label>Name:</label>
             <input
-              type={showPassword ? "text" : "password"}
-              style={inputStyleWithIcon}
-              value={formData.password}
-              onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
+              style={{ ...inputStyle, borderColor: focusedField === 'name' ? '#7C4DFF' : '#ccc' }}
+              value={formData.name}
+              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onFocus={() => setFocusedField('name')}
+              onBlur={() => setFocusedField('')}
             />
-            <button
-              type="button"
-              style={eyeBtn}
-              onClick={() => setShowPassword(prev => !prev)}
-            >
-              {showPassword ? "" : ""}
-            </button>
-          </div>
 
-          {/* Confirm Password Field with Toggle */}
-          <label>Confirm Password:</label>
-          <div style={passwordContainer}>
+            <label>Email:</label>
             <input
-              type={showConfirm ? "text" : "password"}
-              style={inputStyleWithIcon}
-              value={formData.confirmPassword}
-              onChange={e => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              style={{ ...inputStyle, borderColor: focusedField === 'email' ? '#7C4DFF' : '#ccc' }}
+              value={formData.email}
+              onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              onFocus={() => setFocusedField('email')}
+              onBlur={() => setFocusedField('')}
             />
-            <button
-              type="button"
-              style={eyeBtn}
-              onClick={() => setShowConfirm(prev => !prev)}
-            >
-              {showConfirm ? "" : ""}
-            </button>
-          </div>
 
-          <button style={buttonStyle} onClick={handleSubmit}>Submit</button>
-          <button style={cancelBtn} onClick={handleCloseModal}>Cancel</button>
+            <label>Password:</label>
+            <div style={passwordContainer}>
+              <input
+                type={showPassword ? "text" : "password"}
+                style={{ ...inputStyleWithIcon, borderColor: focusedField === 'password' ? '#7C4DFF' : '#ccc' }}
+                value={formData.password}
+                onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField('')}
+              />
+              <button
+                type="button"
+                style={eyeBtn}
+                onClick={() => setShowPassword(prev => !prev)}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
+
+            <label>Confirm Password:</label>
+            <div style={passwordContainer}>
+              <input
+                type={showConfirm ? "text" : "password"}
+                style={{ ...inputStyleWithIcon, borderColor: focusedField === 'confirmPassword' ? '#7C4DFF' : '#ccc' }}
+                value={formData.confirmPassword}
+                onChange={e => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                onFocus={() => setFocusedField('confirmPassword')}
+                onBlur={() => setFocusedField('')}
+              />
+              <button
+                type="button"
+                style={eyeBtn}
+                onClick={() => setShowConfirm(prev => !prev)}
+              >
+                {showConfirm ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1rem' }}>
+              <button style={{ ...buttonStyle, backgroundColor: '#7C4DFF', color: '#fff' }} onClick={handleSubmit}>
+                Submit
+              </button>
+              <button style={{ ...buttonStyle, backgroundColor: '#aaa', color: '#fff' }} onClick={handleCloseModal}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
-    <p style={{
-      marginTop: '1.5rem',
-      fontSize: '0.9rem',
-      color: '#333',
-      backgroundColor: '#f9f9f9',
-      padding: '0.8rem',
-      borderRadius: '8px',
-      textAlign: 'center'
-    }}>
-      💡 <strong>Note:</strong> Removing another admin here will only delete their admin record from the dashboard.
-      <br />
-      To permanently delete an admin account from the system (Firebase Authentication), that admin must
-      log in with their account and remove it themselves.
-    </p>
-
-
+      <p style={{
+        marginTop: '1.5rem',
+        fontSize: '0.9rem',
+        color: '#333',
+        backgroundColor: '#f9f9f9',
+        padding: '0.8rem',
+        borderRadius: '8px',
+        textAlign: 'center'
+      }}>
+        💡 <strong>Note:</strong> Removing another admin here will only delete their admin record from the dashboard.
+        <br />
+        To permanently delete an admin account from the system (Firebase Authentication), that admin must
+        log in with their account and remove it themselves.
+      </p>
     </div>
   );
 };
@@ -342,33 +363,36 @@ const inputStyle = {
   marginBottom: '0.8rem',
   padding: '0.5rem',
   borderRadius: '6px',
-  border: '1px solid #ccc'
+  border: '1px solid #ccc',
+  outline: 'none',
+  fontSize: '0.95rem',
+  transition: 'border 0.2s'
 };
 
-// then it's safe to use inputStyle here
+const inputStyleWithIcon = {
+  ...inputStyle,
+  width: '100%',
+  paddingRight: '2.5rem',
+  MozAppearance: 'textfield',
+};
+
 const passwordContainer = {
   position: 'relative',
   display: 'flex',
   alignItems: 'center'
 };
 
-const inputStyleWithIcon = {
-  ...inputStyle,
-  width: '100%',
-  paddingRight: '2.5rem', 
-  MozAppearance: 'textfield',
-};
-
-
 const eyeBtn = {
   position: 'absolute',
-  right: '0.5rem',
+  paddingTop: '0.01rem',
+  gap: '200px',  
+  right: '0.8rem',
   background: 'none',
   border: 'none',
   cursor: 'pointer',
-  fontSize: '1.2rem'
+  fontSize: '1.2rem',
+  color: '#555'
 };
-
 
 const headingStyle = {
   textAlign: 'center',
@@ -376,13 +400,14 @@ const headingStyle = {
 };
 
 const buttonStyle = {
-  padding: '0.4rem 0.8rem',
-  marginLeft: '0.5rem',
+  padding: '0.6rem 1.2rem',
   border: 'none',
   borderRadius: '6px',
-  backgroundColor: '#5560c7',
   color: '#fff',
-  cursor: 'pointer'
+  cursor: 'pointer',
+  fontSize: '0.95rem',
+  fontWeight: '500',
+  transition: 'background 0.2s'
 };
 
 const modalOverlayStyle = {
@@ -406,7 +431,6 @@ const modalStyle = {
   flexDirection: 'column'
 };
 
-
 const cardStyle = {
   background: '#fff',
   padding: '1rem',
@@ -418,21 +442,12 @@ const cardStyle = {
 };
 
 const removeBtn = {
-  padding: '0.4rem 0.8rem',
+  padding: '0.6rem 1.2rem',
   marginTop: '0.4rem',
+  fontSize: '0.95rem',
   border: 'none',
   borderRadius: '6px',
   backgroundColor: '#d9534f',
-  color: '#fff',
-  cursor: 'pointer'
-};
-
-const cancelBtn = {
-  padding: '0.4rem 0.8rem',
-  marginTop: '0.4rem',
-  border: 'none',
-  borderRadius: '6px',
-  backgroundColor: '#aaa',
   color: '#fff',
   cursor: 'pointer'
 };

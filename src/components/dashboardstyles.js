@@ -71,17 +71,19 @@ export const Input = styled.input`
 export const ButtonGroup = styled.div`
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 20px;
 `;
 
 export const SaveButton = styled.button`
-  padding: 14px 60px;
+  padding: 14px 50px;
   background-color: ${secondary};
   color: ${white};
-  font-size: 1rem;
+  font-size: 0.9rem;
   border: none;
   border-radius: 12px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 
   &:hover {
     background-color: #462e6c;
@@ -89,14 +91,14 @@ export const SaveButton = styled.button`
 `;
 
 export const CancelButton = styled.button`
-  padding: 14px 60px;
-  margin-left: 12px;
+  padding: 14px 50px;
   background-color: ${gray};
   color: ${white};
-  font-size: 1rem;
+  font-size: 0.9rem;
   border: none;
   border-radius: 12px;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 
   &:hover {
     background-color: #5e5e5e;
