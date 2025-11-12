@@ -447,7 +447,7 @@ const removeBtn = {
   fontSize: '0.95rem',
   border: 'none',
   borderRadius: '6px',
-  backgroundColor: '#d9534f',
+  backgroundColor: '#146a92ff',
   color: '#fff',
   cursor: 'pointer'
 };

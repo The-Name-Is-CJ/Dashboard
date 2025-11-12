@@ -25,7 +25,7 @@ const DashLogin = () => {
             { email: data.subAdmin1, role: "Admin 1" },
             { email: data.subAdmin2, role: "Admin 2" },
             { email: data.subAdmin3, role: "Admin 3" },
-          ].filter(admin => admin.email); // only include valid ones
+          ].filter(admin => admin.email); 
         });
         setAdminEmails(admins);
       } catch (err) {
