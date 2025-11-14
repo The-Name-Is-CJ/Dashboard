@@ -22,10 +22,10 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  orderBy,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
-import { FiSearch } from 'react-icons/fi'; // ✅ Imported search icon
-
+import { FiSearch } from 'react-icons/fi'; 
 
 // Search bar styles
 const searchStyles = {
@@ -100,6 +100,8 @@ const ToShip = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [role, setRole] = useState('Unknown');
   const user = auth.currentUser;
+  const [loading, setLoading] = useState(false);
+
 
   // 🔹 Fetch admin role
   useEffect(() => {
@@ -138,7 +140,7 @@ const ToShip = () => {
   // 🔥 Fetch toShip
   useEffect(() => {
     const toShipRef = collection(db, 'toShip');
-    const q = query(toShipRef);
+    const q = query(toShipRef, orderBy('packedAt', 'asc'));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const fetchedOrders = [];
@@ -191,6 +193,10 @@ const ToShip = () => {
   }, []);
 
   const handleConfirmYes = async (order, item) => {
+
+    if (loading) return; 
+    setLoading(true);
+
     try {
       await addDoc(collection(db, 'toReceive'), {
         ...order,
@@ -243,7 +249,9 @@ const ToShip = () => {
       console.log(`Order ${order.orderId} moved to "toReceive"`);
     } catch (err) {
       console.error('Error moving to toReceive:', err);
-    }
+    } finally {
+    setLoading(false); // reset loading
+  }
   };
 
   const handleConfirmNo = () => setConfirmOrder(null);
@@ -345,9 +353,11 @@ const ToShip = () => {
             <button
               style={yesButtonStyle}
               onClick={() => handleConfirmYes(confirmOrder.order, confirmOrder.item)}
+              disabled={loading} // disables while loading
             >
-              Yes
+              {loading ? 'Processing...' : 'Yes'}
             </button>
+
             <button style={noButtonStyle} onClick={handleConfirmNo}>
               No
             </button>

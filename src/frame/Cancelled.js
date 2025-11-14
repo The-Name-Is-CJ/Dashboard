@@ -12,7 +12,7 @@ import {
   TableData,
   StatusButton,
 } from '../components/orderstyle';
-import { collection, query, onSnapshot, getDocs, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, getDocs, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { FiSearch } from 'react-icons/fi'; // ✅ Imported search icon
 
@@ -48,7 +48,8 @@ const Cancelled = () => {
 
   useEffect(() => {
     const cancelledRef = collection(db, 'cancelled');
-    const q = query(cancelledRef);
+    const q = query(cancelledRef, orderBy('cancelledAt', 'desc'));
+
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const fetchedOrders = [];

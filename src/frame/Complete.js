@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableData,
 } from '../components/orderstyle';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { FiSearch } from 'react-icons/fi'; 
 
@@ -46,14 +46,18 @@ const Complete = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const completedRef = collection(db, 'completed');
-    const unsubscribe = onSnapshot(completedRef, snapshot => {
+    const completedRef = collection(db, 'completed'); 
+    const q = query(completedRef, orderBy('receivedAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, snapshot => {
       const fetched = [];
       snapshot.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
       setOrders(fetched);
     });
+
     return () => unsubscribe();
   }, []);
+
 
   // Filter orders by orderId
   const filteredOrders = orders

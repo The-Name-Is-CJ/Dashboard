@@ -75,8 +75,7 @@ const popupStyles = {
   },
 };
 
-// ✅ Top popup component
-const TopPopup = ({ visible, message, onConfirm, onCancel }) => {
+const TopPopup = ({ visible, message, onConfirm, onCancel, loading }) => {
   if (!visible) return null;
 
   return (
@@ -84,13 +83,20 @@ const TopPopup = ({ visible, message, onConfirm, onCancel }) => {
       <div style={popupStyles.popupBox}>
         <p style={popupStyles.text}>{message}</p>
         <div style={popupStyles.buttonContainer}>
-          <button onClick={onConfirm} style={popupStyles.yesButton}>Yes</button>
+          <button 
+            onClick={onConfirm} 
+            style={popupStyles.yesButton} 
+            disabled={loading} // disables while loading
+          >
+            {loading ? 'Processing...' : 'Yes'}
+          </button>
           <button onClick={onCancel} style={popupStyles.noButton}>No</button>
         </div>
       </div>
     </div>
   );
 };
+
 
 // Search bar styles
 const searchStyles = {
@@ -125,6 +131,8 @@ const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [role, setRole] = useState('Unknown');
   const user = auth.currentUser;
+  const [loading, setLoading] = useState(false);
+
 
   // Fetch admin role
   useEffect(() => {
@@ -202,6 +210,10 @@ const Orders = () => {
   };
 
   const handleConfirm = async () => {
+    if (loading) return; 
+
+    setLoading(true); 
+
     try {
       const orderToMove = orders.find(o => o.id === selectedOrderId);
       if (!orderToMove) return;
@@ -241,7 +253,9 @@ const Orders = () => {
     } catch (err) {
       console.error('Error moving order to toShip:', err);
       setPopupVisible(false);
-    }
+    } finally {
+    setLoading(false); 
+  }
   };
 
   const handleCancel = () => {
@@ -325,7 +339,9 @@ const Orders = () => {
         message={popupMessage}
         onConfirm={handleConfirm}
         onCancel={handleCancel}
+        loading={loading} // pass loading state
       />
+
     </OrdersContainer>
   );
 };
