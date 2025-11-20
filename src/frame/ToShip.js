@@ -23,6 +23,8 @@ import {
   doc,
   serverTimestamp,
   orderBy,
+  getDoc, 
+  updateDoc
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { FiSearch } from 'react-icons/fi'; 
@@ -97,35 +99,12 @@ const ToShip = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [confirmOrder, setConfirmOrder] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [role, setRole] = useState('Unknown');
-  const user = auth.currentUser;
+  const [searchTerm, setSearchTerm] = useState('');  
   const [loading, setLoading] = useState(false);
+  const [removeId, setRemoveId] = useState(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [weeklyToShipCount, setWeeklyToShipCount] = useState(0);
 
-
-  // 🔹 Fetch admin role
-  useEffect(() => {
-    const fetchRole = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, 'admins'));
-        let foundRole = 'Unknown';
-
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          if (data.mainAdmin === user?.email) foundRole = 'Main Admin';
-          else if (data.subAdmin1 === user?.email) foundRole = 'Admin 1';
-          else if (data.subAdmin2 === user?.email) foundRole = 'Admin 2';
-          else if (data.subAdmin3 === user?.email) foundRole = 'Admin 3';
-        });
-
-        setRole(foundRole);
-      } catch (err) {
-        console.error('Error fetching role:', err);
-      }
-    };
-
-    if (user?.email) fetchRole();
-  }, [user]);
 
   // Filter orders and their items
   const filteredOrders = orders
@@ -137,60 +116,56 @@ const ToShip = () => {
     }))
     .filter((order) => order.items.length > 0);
 
-  // 🔥 Fetch toShip
   useEffect(() => {
     const toShipRef = collection(db, 'toShip');
     const q = query(toShipRef, orderBy('packedAt', 'asc'));
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const fetchedOrders = [];
-      const userIds = new Set();
+    const unsubscribe = onSnapshot(q, snapshot => {
+      try {
+        const fetchedOrders = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
 
-      snapshot.forEach((docSnap) => {
-        const orderData = { ...docSnap.data() };
-        fetchedOrders.push(orderData);
-        if (orderData.userId) userIds.add(orderData.userId);
-      });
-
-      if (userIds.size === 0) {
         setOrders(fetchedOrders);
-        return;
+
+        // 🗓️ Compute total toShip orders this week (Sunday → today)
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday
+        const startOfWeek = new Date(today);
+        startOfWeek.setHours(0, 0, 0, 0);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+
+        const weeklyCount = fetchedOrders.filter(order => {
+          if (!order.packedAt) return false;
+          const packedDate = order.packedAt.toDate();
+          return packedDate >= startOfWeek && packedDate <= today;
+        }).length;
+
+        setWeeklyToShipCount(weeklyCount); // <-- make sure you have this state
+      } catch (err) {
+        console.error('Error fetching toShip orders:', err);
       }
-
-      const userIdArray = Array.from(userIds);
-      const userMap = {};
-
-      await Promise.all(
-        userIdArray.map(async (uid) => {
-          try {
-            const locQuery = query(
-              collection(db, 'shippingLocations'),
-              where('userId', '==', uid)
-            );
-            const locSnap = await getDocs(locQuery);
-            if (!locSnap.empty) {
-              const locData = locSnap.docs[0].data();
-              userMap[uid] = locData.name || 'Unknown';
-            } else {
-              userMap[uid] = 'Unknown';
-            }
-          } catch (err) {
-            console.error('Error fetching shipping location for userId=', uid, err);
-            userMap[uid] = 'Unknown';
-          }
-        })
-      );
-
-      const ordersWithNames = fetchedOrders.map((order) => ({
-        ...order,
-        name: userMap[order.userId] || 'Unknown',
-      }));
-
-      setOrders(ordersWithNames);
     });
 
     return () => unsubscribe();
   }, []);
+
+   const getUserRole = async (email) => {
+      try {
+        const adminsRef = collection(db, "admins");
+        const q = query(adminsRef, where("email", "==", email));
+        const snapshot = await getDocs(q);
+  
+        if (!snapshot.empty) {
+          const data = snapshot.docs[0].data();
+          return data.role || "Admin";
+        }
+      } catch (err) {
+        console.error("Error fetching role:", err);
+      }
+      return "Unknown";
+    };
 
   const handleConfirmYes = async (order, item) => {
 
@@ -236,10 +211,12 @@ const ToShip = () => {
         read: false,
       });
 
+      const userRole = await getUserRole(user?.email);
       const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       await addDoc(collection(db, 'recentActivityLogs'), {
         logID,
         action: `Order ${order.orderId} is shipped`,
+        role: userRole,
         userEmail: user?.email || 'Unknown',
         role,
         timestamp: serverTimestamp(),
@@ -286,28 +263,36 @@ const ToShip = () => {
         </div>
       </OrdersHeader>
 
-      {/* Tabs */}
-      <OrdersTabs>
-        {tabs.map((tab) => (
-          <TabItem key={tab.name} active={location.pathname === tab.path}>
-            <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
-              {tab.name}
-            </Link>
-          </TabItem>
-        ))}
+      <OrdersTabs style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}> 
+        <div style={{ display: "flex", gap: "15px" }}>
+          {tabs.map(tab => (
+            <TabItem key={tab.name} active={location.pathname === tab.path}>
+              <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
+                {tab.name}
+              </Link>
+            </TabItem>
+          ))}
+        </div>
+
+        <div style={{ marginTop: "10px", fontSize: "25px", fontWeight: "500", color: "#444" }}>
+          Total to-ship orders this week:{" "}
+          <span style={{ fontWeight: "500", color: "#ff6600" }}>
+            {weeklyToShipCount}
+          </span>
+        </div>
       </OrdersTabs>
 
       <OrdersTable>
         <TableHead>
           <TableRow>
-            <TableHeader>Customer</TableHeader>
-            <TableHeader>Address</TableHeader>
-            <TableHeader>Packed Date</TableHeader>
-            <TableHeader>Product</TableHeader>
-            <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Sizes</TableHeader>
-            <TableHeader>Status</TableHeader>
+            <TableHeader width="150px" style={{ textAlign: 'center' }}>Customer</TableHeader>
+            <TableHeader width="325px" style={{ textAlign: 'center' }}>Address</TableHeader>
+            <TableHeader width="125px" style={{ textAlign: 'center' }}>Packed Date</TableHeader>
+            <TableHeader width="225px" style={{ textAlign: 'center' }}>Product</TableHeader>
+            <TableHeader width="30px" style={{ textAlign: 'center' }}>Quantity</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Amount</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Sizes</TableHeader>
+            <TableHeader width="100px" style={{ textAlign: 'center' }}>Status</TableHeader>
           </TableRow>
         </TableHead>
         <tbody>
@@ -317,15 +302,45 @@ const ToShip = () => {
                 <TableRow key={`${order.id}-${item.id}`}>
                   <TableData>{order.name}</TableData>
                   <TableData>{order.address || '-'}</TableData>
-                  <TableData>{order.packedAt?.toDate().toLocaleString()}</TableData>
-                  <TableData>{item.productName}</TableData>
-                  <TableData>{item.quantity}</TableData>
-                  <TableData>₱{order.total}</TableData>
-                  <TableData>{item.size || '-'}</TableData>
-                  <TableData>
-                    <StatusButton onClick={() => setConfirmOrder({ order, item })}>
-                      To Ship
-                    </StatusButton>
+                  <TableData style={{ textAlign: 'center' }}>{order.packedAt?.toDate().toLocaleString()}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.productName}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.quantity}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>₱{order.total}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.size || '-'}</TableData>
+                  <TableData >
+                    {order.name &&
+                    order.name.trim() !== "" &&
+                    order.name !== "Unknown" &&
+                    order.name !== "User not found" &&
+                    order.userId &&
+                    order.userId !== "" &&
+                    order.userId !== null ? (
+                        // Normal TO SHIP button
+                        <StatusButton onClick={() => setConfirmOrder({ order, item })}>
+                          To Ship
+                        </StatusButton>
+                      ) : (
+                        // REMOVE button for invalid/missing user
+                        <button
+                          onClick={() => {
+                            setRemoveId(order.id);
+                            setShowRemoveModal(true);
+                          }}
+                          style={{
+                            backgroundColor: "#ff4444",
+                            color: "#fff",
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            fontWeight: "bold",
+                            fontSize: "0.9rem",
+                            cursor: "pointer",
+                            border: "none",
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+
                   </TableData>
                 </TableRow>
               ))
@@ -364,6 +379,144 @@ const ToShip = () => {
           </div>
         </div>
       )}
+      {showRemoveModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "10px",
+              width: "300px",
+              textAlign: "center",
+            }}
+          >
+            <h3>Delete Record?</h3>
+            <p>Are you sure you want to remove this item?</p>
+
+            <button
+              onClick={async () => {
+                if (loading) return; 
+                setLoading(true);
+
+
+                try {
+                  // 1️⃣ Get the order you're deleting
+                  const toShipDoc = await getDoc(doc(db, "toShip", removeId));
+                  if (!toShipDoc.exists()) throw new Error("Order not found.");
+
+                  const orderData = toShipDoc.data();
+
+  
+                  const items = orderData.items || [];
+
+                  for (const item of items) {
+                    const productID = item.productId;
+                    const size = item.size;
+                    const qtyToRestore = item.quantity;
+
+                    if (!productID || !size || !qtyToRestore) {
+                      console.warn("Missing product data, skipping stock restore.");
+                      continue;
+                    }
+
+                    // 2️⃣ Fetch the product document
+                    const productRef = doc(db, "products", productID);
+                    const productSnap = await getDoc(productRef);
+
+                    if (!productSnap.exists()) {
+                      console.warn(`Product ${productID} not found. Skipping.`);
+                      continue;
+                    }
+
+                    const productData = productSnap.data();
+                    const currentStock = productData.stock || {};
+                    const currentSizeStock = currentStock[size] || 0;
+
+                    // 3️⃣ Update stock values
+                    const updatedSizeStock = currentSizeStock + qtyToRestore;
+
+                    // Recompute total stock
+                    let updatedTotalStock = 0;
+                    Object.keys(currentStock).forEach((sz) => {
+                      if (sz === size) {
+                        updatedTotalStock += updatedSizeStock;
+                      } else {
+                        updatedTotalStock += currentStock[sz];
+                      }
+                    });
+
+                    // 4️⃣ Apply the update in Firestore
+                    await updateDoc(productRef, {
+                      stock: {
+                        ...currentStock,
+                        [size]: updatedSizeStock,
+                      },
+                      totalStock: updatedTotalStock,
+                    });
+
+                    console.log(
+                      `Restored ${qtyToRestore} pcs of size ${size} for product ${productID}.`
+                    );
+                  }
+
+                  // 5️⃣ Finally delete the toShip document
+                  await deleteDoc(doc(db, "toShip", removeId));
+
+                  setShowRemoveModal(false);
+                  setRemoveId(null);
+
+                } catch (error) {
+                  console.error("Error deleting record:", error);
+                }finally {
+                setLoading(false); // reset loading
+              }
+              }}
+              style={{
+                background: "#ff4444",
+                color: "white",
+                padding: "8px 15px",
+                borderRadius: "6px",
+                border: "none",
+                marginRight: "10px",
+                cursor: "pointer",
+              }}
+            >
+              {loading ? "Deleting…" : "Yes, Delete"}
+            </button>
+
+
+            <button
+              onClick={() => {
+                setShowRemoveModal(false);
+                setRemoveId(null);
+              }}
+              style={{
+                background: "#ccc",
+                padding: "8px 15px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                border: "none",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
     </OrdersContainer>
   );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase";
-import { addDoc, collection, serverTimestamp, getDocs } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, getDoc, doc, } from "firebase/firestore";
 import { db } from "../firebase";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
@@ -17,23 +17,34 @@ const DashLogin = () => {
   useEffect(() => {
     const fetchAdmins = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "admins"));
-        const admins = querySnapshot.docs.flatMap(doc => {
-          const data = doc.data();
-          return [
-            { email: data.mainAdmin, role: "Main Admin" },
-            { email: data.subAdmin1, role: "Admin 1" },
-            { email: data.subAdmin2, role: "Admin 2" },
-            { email: data.subAdmin3, role: "Admin 3" },
-          ].filter(admin => admin.email); 
-        });
+        const adminIds = ["A01", "A02", "A03", "A04"];
+        const admins = [];
+
+        for (const id of adminIds) {
+          const docRef = doc(db, "admins", id);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.email) {
+              admins.push({
+                name: data.name || "",
+                email: data.email,
+                role: data.role || "Admin",
+              });
+            }
+          }
+        }
+
         setAdminEmails(admins);
       } catch (err) {
         console.error("Error fetching admins:", err);
       }
     };
+
     fetchAdmins();
   }, []);
+
 
 
   const handleLogin = async (e) => {
@@ -45,20 +56,19 @@ const DashLogin = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // ✅ Identify role from fetched admins
-      const matchedAdmin = adminEmails.find(a => a.email === user.email);
+     
+      const matchedAdmin = adminEmails.find(a => a.email === user.email.toLowerCase());
+
 
       if (!matchedAdmin) {
         setErrorMsg("Unauthorized user.");
         return;
       }
 
-      // ✅ Generate unique logID
+      // Log activity
       const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-      // ✅ Log activity with role and logID
       await addDoc(collection(db, "recentActivityLogs"), {
-        logID: logID,
+        logID,
         action: "logged in",
         userEmail: user.email,
         role: matchedAdmin.role,
@@ -68,7 +78,6 @@ const DashLogin = () => {
       navigate("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-
       if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
         setErrorMsg("Invalid email or password.");
       } else if (error.code === "auth/invalid-email") {

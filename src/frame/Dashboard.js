@@ -235,6 +235,8 @@ const Dashboard = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [confirmAction, setConfirmAction] = useState(() => () => {});
+  const [selectedLogs, setSelectedLogs] = useState([]);
+
 
   const getTotalStock = (stock) => {
   if (!stock) return 0;
@@ -378,6 +380,28 @@ const toggleLog = id =>
   setLogs(prev => prev.map(l => l.id === id ? { ...l, expanded: !l.expanded } : l));
 const avg = parseFloat(averageRating);
 
+const toggleSelectLog = (id) => {
+  setSelectedLogs(prev =>
+    prev.includes(id)
+      ? prev.filter(lid => lid !== id) 
+      : [...prev, id]                  
+  );
+};
+
+
+const handleDeleteSelectedLogs = () => {
+  if (selectedLogs.length === 0) return;
+  setModalMessage(`Delete ${selectedLogs.length} selected log(s) permanently?`);
+  setConfirmAction(() => async () => {
+    await Promise.all(selectedLogs.map(id => deleteDoc(doc(db, 'recentActivityLogs', id))));
+    setLogs(prev => prev.filter(log => !selectedLogs.includes(log.id)));
+    setSelectedLogs([]);
+    setModalVisible(false);
+  });
+  setModalVisible(true);
+};
+
+
   return (
     <Container>
       <Header>Welcome back, Admin!</Header>
@@ -506,6 +530,13 @@ const avg = parseFloat(averageRating);
 
         </LogsHeader>
 
+        {selectedLogs.length > 0 && (
+          <DeleteAllButton onClick={handleDeleteSelectedLogs}>
+            Delete Selected Logs
+          </DeleteAllButton>
+        )}
+
+
           {logs.length === 0 ? (
             <p>No recent activity yet.</p>
           ) : (
@@ -514,23 +545,41 @@ const avg = parseFloat(averageRating);
                 <p>No logs found for this search.</p>
               ) : (
                 <>
-                  {(showAllLogs || logSearchTerm ? displayedLogs : displayedLogs.slice(0, 5)).map(log => (
-                    <div key={log.id}>
-                      <LogItem>
-                        <LogLeft onClick={() => toggleLog(log.id)}>
-                          [{log.timestamp?.toDate
-                            ? new Date(log.timestamp.toDate()).toLocaleString()
-                            : 'Unknown Time'}] {log.action} <strong>{log.productName}</strong>
-                        </LogLeft>
-                        <DropdownButton onClick={() => handleDeleteLog(log.id)}>
-                          <FaTrash />
-                        </DropdownButton>
-                      </LogItem> 
-                      {log.expanded && log.details && (
-                        <LogDetails>➤ {log.details}</LogDetails>
-                      )}
-                    </div>
-                  ))}
+                {(showAllLogs || logSearchTerm ? displayedLogs : displayedLogs.slice(0, 5)).map(log => (
+                  <div key={log.id}>
+                    <LogItem
+                      onClick={(e) => {
+                        if (e.target.closest('button')) return; // ignore clicks on delete button
+                        toggleSelectLog(log.id);
+                      }}
+                      style={{
+                        backgroundColor: selectedLogs.includes(log.id) ? '#e0e0ff' : 'transparent',
+                        cursor: 'pointer',
+                        borderRadius: '6px',
+                        padding: '0.5rem',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLogs.includes(log.id)}
+                        readOnly
+                        style={{ marginRight: '8px', pointerEvents: 'none' }} // makes checkbox non-clickable
+                      />
+                      <LogLeft>
+                        [{log.timestamp?.toDate
+                          ? new Date(log.timestamp.toDate()).toLocaleString()
+                          : 'Unknown Time'}] {log.action} <strong>{log.productName}</strong>
+                      </LogLeft>
+                      <DropdownButton onClick={() => handleDeleteLog(log.id)}>
+                        <FaTrash />
+                      </DropdownButton>
+                    </LogItem>
+                    {log.expanded && log.details && (
+                      <LogDetails>➤ {log.details}</LogDetails>
+                    )}
+                  </div>
+                ))}
+
 
                   {displayedLogs.length > 5 && (
                     <ToggleLogsButton onClick={() => setShowAllLogs(prev => !prev)}>

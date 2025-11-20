@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db} from './firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import DashLogin from './frame/DashLogin';
 import Products from './frame/Products';
 import Sidebar from './components/Sidebar';
@@ -30,18 +30,25 @@ function App() {
 
   useEffect(() => {
     const fetchAdmins = async () => {
-      const querySnapshot = await getDocs(collection(db, "admins"));
-      const emails = querySnapshot.docs.flatMap(doc => {
-        const data = doc.data();
-        return [
-          data.mainAdmin,
-          data.subAdmin1,
-          data.subAdmin2,
-          data.subAdmin3
-        ].filter(Boolean); // removes empty values
-      });
-      setAdminEmails(emails);
+      try {
+        const adminIds = ["A01", "A02", "A03", "A04"];
+        const admins = [];
+
+        for (const id of adminIds) {
+          const docRef = doc(db, "admins", id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.email) admins.push(data.email.toLowerCase());
+          }
+        }
+
+        setAdminEmails(admins);
+      } catch (err) {
+        console.error("Error fetching admins:", err);
+      }
     };
+
     fetchAdmins();
   }, []);
 

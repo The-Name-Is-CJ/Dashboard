@@ -14,7 +14,7 @@ import {
 } from '../components/orderstyle';
 import { collection, query, onSnapshot, getDocs, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
-import { FiSearch } from 'react-icons/fi'; // ✅ Imported search icon
+import { FiSearch } from 'react-icons/fi'; 
 
 
 // Search bar styles
@@ -45,63 +45,48 @@ const Cancelled = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [weeklyCancelledCount, setWeeklyCancelledCount] = useState(0);
+
 
   useEffect(() => {
     const cancelledRef = collection(db, 'cancelled');
     const q = query(cancelledRef, orderBy('cancelledAt', 'desc'));
 
+    const unsubscribe = onSnapshot(q, snapshot => {
+      try {
+        const fetchedOrders = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const fetchedOrders = [];
-      const userIds = new Set();
-
-      snapshot.forEach(docSnap => {
-        const orderData = { id: docSnap.id, ...docSnap.data() };
-        fetchedOrders.push(orderData);
-        if (orderData.userId) userIds.add(orderData.userId);
-      });
-
-      if (userIds.size === 0) {
+        // Update orders state
         setOrders(fetchedOrders);
-        return;
+
+        // 🗓️ Compute total cancelled this week (Sunday → today)
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday
+        const startOfWeek = new Date(today);
+        startOfWeek.setHours(0, 0, 0, 0);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+
+        const weeklyCount = fetchedOrders.filter(order => {
+          if (!order.cancelledAt) return false;
+
+          const cancelledDate = order.cancelledAt.toDate();
+          return cancelledDate >= startOfWeek && cancelledDate <= today;
+        }).length;
+
+        setWeeklyCancelledCount(weeklyCount);
+
+      } catch (err) {
+        console.error('Error fetching cancelled orders:', err);
       }
-
-      // Fetch customer names from shippingLocations
-      const userIdArray = Array.from(userIds);
-      const userMap = {};
-
-      await Promise.all(
-        userIdArray.map(async (uid) => {
-          try {
-            const userDocRef = collection(db, 'users');
-            const userQuery = query(userDocRef, where('userId', '==', uid));
-            const userSnap = await getDocs(userQuery);
-
-            if (!userSnap.empty) {
-              const userData = userSnap.docs[0].data();
-              const shippingName =
-                userData.shippingLocations?.[0]?.name || uid; // fallback
-              userMap[uid] = shippingName;
-            } else {
-              userMap[uid] = uid;
-            }
-          } catch (err) {
-            console.error("Error fetching shipping location:", err);
-            userMap[uid] = uid;
-          }
-        })
-      );
-
-      const ordersWithNames = fetchedOrders.map(order => ({
-        ...order,
-        name: order.name || userMap[order.userId] || order.userId,
-      }));
-
-      setOrders(ordersWithNames);
     });
 
     return () => unsubscribe();
   }, []);
+
+
 
   // Filter orders by search term
   const filteredOrders = orders
@@ -139,30 +124,47 @@ const Cancelled = () => {
             onBlur={(e) => (e.target.style.borderColor = '#ccc')}
           />
            <FiSearch style={searchStyles.icon} /> 
+           
+           
         </div>
-      </OrdersHeader>
 
-      <OrdersTabs>
-        {tabs.map(tab => (
-          <TabItem key={tab.name} active={location.pathname === tab.path}>
-            <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
-              {tab.name}
-            </Link>
-          </TabItem>
-        ))}
+
+      </OrdersHeader>
+      <OrdersTabs style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        
+        {/* LEFT SIDE */}
+        <div style={{ display: "flex", gap: "15px" }}>
+          {tabs.map(tab => (
+            <TabItem key={tab.name} active={location.pathname === tab.path}>
+              <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
+                {tab.name}
+              </Link>
+            </TabItem>
+          ))}
+        </div>
+
+        {/* RIGHT SIDE */}
+        <div style={{ fontSize: "25px", fontWeight: "500", color: "#444" }}>
+          Total cancelled orders this week: 
+          <span style={{ fontWeight: "500", color: "#ff6600" }}>{weeklyCancelledCount}</span>
+        </div>
+
       </OrdersTabs>
 
+
       <OrdersTable>
+        
         <TableHead>
+        
           <TableRow>
-            <TableHeader>Customer</TableHeader>
-            <TableHeader>Address</TableHeader>
-            <TableHeader>Cancelled Date</TableHeader>
-            <TableHeader>Product</TableHeader>
-            <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Sizes</TableHeader>
-            <TableHeader>Status</TableHeader>
+            <TableHeader width="150px" style={{ textAlign: 'center' }}>Customer</TableHeader>
+            <TableHeader width="325px" style={{ textAlign: 'center' }}>Address</TableHeader>
+            <TableHeader width="125px" style={{ textAlign: 'center' }}>Cancelled Date</TableHeader>
+            <TableHeader width="225px" style={{ textAlign: 'center' }}>Product</TableHeader>
+            <TableHeader width="30px" style={{ textAlign: 'center' }}>Quantity</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Amount</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Sizes</TableHeader>
+            <TableHeader width="100px" style={{ textAlign: 'center' }}>Status</TableHeader>
           </TableRow>
         </TableHead>
         <tbody>
@@ -172,12 +174,12 @@ const Cancelled = () => {
                 <TableRow key={`${order.id}-${item.id}`}>
                   <TableData>{order.name}</TableData>
                   <TableData>{order.address || '-'}</TableData>
-                  <TableData>{order.cancelledAt?.toDate().toLocaleString() || '-'}</TableData>
-                  <TableData>{item.productName}</TableData>
-                  <TableData>{item.quantity}</TableData>
-                  <TableData>₱{item.price}</TableData>
-                  <TableData>{item.size || '-'}</TableData>
-                  <TableData>
+                  <TableData style={{ textAlign: 'center' }}>{order.cancelledAt?.toDate().toLocaleString() || '-'}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.productName}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.quantity}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>₱{item.price}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.size || '-'}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>
                     <button
                       style={{
                         backgroundColor: '#ff6600',

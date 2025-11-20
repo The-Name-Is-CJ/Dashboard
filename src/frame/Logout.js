@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
-import { addDoc, collection, serverTimestamp, getDocs } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
 import {
   ModalOverlay,
   ModalContent,
@@ -21,21 +21,31 @@ const Logout = () => {
   useEffect(() => {
     const fetchAdmins = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'admins'));
-        const admins = querySnapshot.docs.flatMap(doc => {
-          const data = doc.data();
-          return [
-            { email: data.mainAdmin, role: 'Main Admin' },
-            { email: data.subAdmin1, role: 'Admin 1' },
-            { email: data.subAdmin2, role: 'Admin 2' },
-            { email: data.subAdmin3, role: 'Admin 3' },
-          ].filter(admin => admin.email);
-        });
+        const adminIds = ["A01", "A02", "A03", "A04"];
+        const admins = [];
+
+        for (const id of adminIds) {
+          const docRef = doc(db, "admins", id);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.email) {
+              admins.push({
+                name: data.name || "",
+                email: data.email,
+                role: data.role || "Admin",
+              });
+            }
+          }
+        }
+
         setAdminEmails(admins);
       } catch (err) {
-        console.error('Error fetching admins:', err);
+        console.error("Error fetching admins:", err);
       }
     };
+
     fetchAdmins();
   }, []);
 

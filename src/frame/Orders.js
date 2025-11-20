@@ -22,7 +22,9 @@ import {
   orderBy,
   addDoc,
   serverTimestamp,
-  getDocs
+  getDocs,
+  getDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { FiSearch } from 'react-icons/fi'; // ✅ Imported search icon
@@ -132,7 +134,9 @@ const Orders = () => {
   const [role, setRole] = useState('Unknown');
   const user = auth.currentUser;
   const [loading, setLoading] = useState(false);
-
+  const [removeId, setRemoveId] = useState(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [weeklyOrderCount, setWeeklyOrderCount] = useState(0);
 
   // Fetch admin role
   useEffect(() => {
@@ -158,18 +162,34 @@ const Orders = () => {
     if (user?.email) fetchRole();
   }, [user]);
 
-  // Fetch orders
   useEffect(() => {
     const ordersRef = collection(db, 'orders');
     const q = query(ordersRef, orderBy('createdAt', 'asc'));
 
     const unsubscribe = onSnapshot(q, snapshot => {
       try {
+        // Fetch orders
         const fetchedOrders = snapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data(),
         }));
         setOrders(fetchedOrders);
+
+        // 🗓️ Compute total orders this week (Sunday → today)
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday
+        const startOfWeek = new Date(today);
+        startOfWeek.setHours(0, 0, 0, 0);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+
+        const weeklyCount = fetchedOrders.filter(order => {
+          if (!order.createdAt) return false;
+          const orderDate = order.createdAt.toDate();
+          return orderDate >= startOfWeek && orderDate <= today;
+        }).length;
+
+        setWeeklyOrderCount(weeklyCount); // <-- make sure you have a state for this
+
       } catch (err) {
         console.error('Error fetching orders:', err);
       }
@@ -284,7 +304,9 @@ const Orders = () => {
         </div>
       </OrdersHeader>
 
-      <OrdersTabs>
+     <OrdersTabs style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}> 
+
+      <div style={{ display: "flex", gap: "15px" }}>
         {tabs.map(tab => (
           <TabItem key={tab.name} active={location.pathname === tab.path}>
             <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -292,19 +314,30 @@ const Orders = () => {
             </Link>
           </TabItem>
         ))}
-      </OrdersTabs>
+      </div>
+
+      <div style={{ marginTop: "10px", fontSize: "25px", fontWeight: "500", color: "#444" }}>
+        Total orders this week:{" "}
+        <span style={{ fontWeight: "500", color: "#9747FF" }}>
+          {weeklyOrderCount}
+        </span>
+      </div>
+
+    </OrdersTabs>
+
 
       <OrdersTable>
         <TableHead>
           <TableRow>
-            <TableHeader>Customer</TableHeader>
-            <TableHeader>Address</TableHeader>
-            <TableHeader>Order Date</TableHeader>
-            <TableHeader>Product</TableHeader>
-            <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Sizes</TableHeader>
-            <TableHeader>Status</TableHeader>
+          <TableHeader width="150px" style={{ textAlign: 'center' }}>Customer</TableHeader>
+          <TableHeader width="325px" style={{ textAlign: 'center' }}>Address</TableHeader>
+          <TableHeader width="125px" style={{ textAlign: 'center' }}>Order Date</TableHeader>
+          <TableHeader width="225px" style={{ textAlign: 'center' }}>Product</TableHeader>
+          <TableHeader width="30px" style={{ textAlign: 'center' }}>Quantity</TableHeader>
+          <TableHeader width="50px" style={{ textAlign: 'center' }}>Amount</TableHeader>
+          <TableHeader width="50px" style={{ textAlign: 'center' }}>Sizes</TableHeader>
+          <TableHeader width="100px" style={{ textAlign: 'center' }}>Status</TableHeader>
+
           </TableRow>
         </TableHead>
         <tbody>
@@ -313,19 +346,45 @@ const Orders = () => {
               <TableRow key={item.id}>
                 <TableData>{order.name}</TableData>
                 <TableData>{order.address || '-'}</TableData>
-                <TableData>{order.createdAt?.toDate().toLocaleString()}</TableData>
-                <TableData>{item.productName}</TableData>
-                <TableData>{item.quantity}</TableData>
-                <TableData>₱{order.total}</TableData>
-                <TableData>{item.size || '-'}</TableData>
-                <TableData>
-                  {(order.status === 'Pending' || order.status === 'To Ship') ? (
-                    <StatusButton onClick={() => handleStatusClick(order.id)}>
-                      {order.status}
-                    </StatusButton>
+                <TableData style={{ textAlign: 'center' }}>{order.createdAt?.toDate().toLocaleString()}</TableData>
+                <TableData style={{ textAlign: 'center' }}>{item.productName}</TableData>
+                <TableData style={{ textAlign: 'center' }}>{item.quantity}</TableData>
+                <TableData style={{ textAlign: 'center' }}>₱{order.total}</TableData>
+                <TableData style={{ textAlign: 'center' }}>{item.size || '-'}</TableData>
+                <TableData style={{ textAlign: 'center' }}>
+                  {order.name &&
+                  order.name.trim() !== "" &&
+                  order.name !== "Unknown" &&
+                  order.name !== "User not found" &&
+                  order.userId &&
+                  order.userId !== "" &&
+                  order.userId !== null ? (
+                      // Normal TO SHIP button
+                      <StatusButton onClick={() => handleStatusClick(order.id)}>
+                        To Ship
+                      </StatusButton>
                   ) : (
-                    <StatusButton disabled>{order.status}</StatusButton>
+                      // REMOVE button
+                      <button
+                        onClick={() => {
+                          setRemoveId(order.id);
+                          setShowRemoveModal(true);
+                        }}
+                        style={{
+                          backgroundColor: "#ff4444",
+                          color: "#fff",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          fontWeight: "bold",
+                          fontSize: "0.9rem",
+                          cursor: "pointer",
+                          border: "none",
+                        }}
+                      >
+                        Remove
+                      </button>
                   )}
+
                 </TableData>
               </TableRow>
             ))
@@ -341,6 +400,125 @@ const Orders = () => {
         onCancel={handleCancel}
         loading={loading} // pass loading state
       />
+
+      {showRemoveModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "10px",
+              width: "300px",
+              textAlign: "center",
+            }}
+          >
+            <h3>Delete Record?</h3>
+            <p>Are you sure you want to remove this item?</p>
+
+            <button
+              onClick={async () => {
+                if (loading) return;
+                setLoading(true);
+
+                try {
+                  // 1️⃣ Get the order being deleted
+                  const orderDoc = await getDoc(doc(db, "orders", removeId));
+                  if (!orderDoc.exists()) throw new Error("Order not found.");
+
+                  const orderData = orderDoc.data();
+                  const items = orderData.items || [];
+
+                  // 2️⃣ Loop through all items and restore stock
+                  for (const item of items) {
+                    const productID = item.productId;
+                    const size = item.size;
+                    const qtyToRestore = item.quantity;
+
+                    if (!productID || !size || !qtyToRestore) continue;
+
+                    const productRef = doc(db, "products", productID);
+                    const productSnap = await getDoc(productRef);
+                    if (!productSnap.exists()) continue;
+
+                    const productData = productSnap.data();
+                    const currentStock = productData.stock || {};
+                    const existingStock = currentStock[size] || 0;
+
+                    const updatedStock = existingStock + qtyToRestore;
+
+                    // compute total stock
+                    let updatedTotalStock = 0;
+                    Object.keys(currentStock).forEach(sz => {
+                      updatedTotalStock += (sz === size ? updatedStock : currentStock[sz]);
+                    });
+
+                    // 3️⃣ Update Firestore stock
+                    await updateDoc(productRef, {
+                      stock: {
+                        ...currentStock,
+                        [size]: updatedStock
+                      },
+                      totalStock: updatedTotalStock
+                    });
+                  }
+
+                  // 4️⃣ Delete the order
+                  await deleteDoc(doc(db, "orders", removeId));
+
+                  setShowRemoveModal(false);
+                  setRemoveId(null);
+
+                } catch (error) {
+                  console.error("Error deleting record:", error);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              style={{
+                background: "#ff4444",
+                color: "white",
+                padding: "8px 15px",
+                borderRadius: "6px",
+                border: "none",
+                marginRight: "10px",
+                cursor: "pointer",
+              }}
+            >
+              {loading ? "Deleting…" : "Yes, Delete"}
+            </button>
+
+            <button
+              onClick={() => {
+                setShowRemoveModal(false);
+                setRemoveId(null);
+              }}
+              style={{
+                background: "#ccc",
+                padding: "8px 15px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                border: "none",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
 
     </OrdersContainer>
   );

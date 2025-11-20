@@ -44,19 +44,46 @@ const Complete = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [weeklyCompletedCount, setWeeklyCompletedCount] = useState(0);
+
 
   useEffect(() => {
     const completedRef = collection(db, 'completed'); 
     const q = query(completedRef, orderBy('receivedAt', 'desc'));
 
     const unsubscribe = onSnapshot(q, snapshot => {
-      const fetched = [];
-      snapshot.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
-      setOrders(fetched);
+      try {
+        // Fetch orders
+        const fetchedOrders = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        setOrders(fetchedOrders);
+
+        // 🗓️ Compute total completed this week (Sunday → today)
+        const today = new Date();
+        const dayOfWeek = today.getDay(); // 0 = Sunday
+        const startOfWeek = new Date(today);
+        startOfWeek.setHours(0, 0, 0, 0);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+
+        const weeklyCount = fetchedOrders.filter(order => {
+          if (!order.receivedAt) return false;
+          const receivedDate = order.receivedAt.toDate();
+          return receivedDate >= startOfWeek && receivedDate <= today;
+        }).length;
+
+        setWeeklyCompletedCount(weeklyCount);
+
+      } catch (err) {
+        console.error('Error fetching completed orders:', err);
+      }
     });
 
     return () => unsubscribe();
   }, []);
+
+
 
 
   // Filter orders by orderId
@@ -98,7 +125,10 @@ const Complete = () => {
         </div>
       </OrdersHeader>
 
-      <OrdersTabs>
+     <OrdersTabs style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+  
+      {/* LEFT: tabs */}
+      <div style={{ display: "flex", gap: "15px" }}>
         {tabs.map(tab => (
           <TabItem key={tab.name} active={location.pathname === tab.path}>
             <Link to={tab.path} style={{ color: 'inherit', textDecoration: 'none' }}>
@@ -106,19 +136,30 @@ const Complete = () => {
             </Link>
           </TabItem>
         ))}
-      </OrdersTabs>
+      </div>
+
+      {/* RIGHT: weekly completed count */}
+      <div style={{ marginTop: "10px", fontSize: "25px", fontWeight: "500", color: "#444" }}>
+        Total sold this week:{" "}
+        <span style={{ fontWeight: "500", color: "#28a745" }}>
+          {weeklyCompletedCount}
+        </span>
+      </div>
+
+    </OrdersTabs>
+
 
       <OrdersTable>
         <TableHead>
           <TableRow>
-            <TableHeader>Customer</TableHeader>
-            <TableHeader>Address</TableHeader>
-            <TableHeader>Received Date</TableHeader>
-            <TableHeader>Product</TableHeader>
-            <TableHeader>Quantity</TableHeader>
-            <TableHeader>Amount</TableHeader>
-            <TableHeader>Sizes</TableHeader>
-            <TableHeader>Status</TableHeader>
+            <TableHeader width="150px" style={{ textAlign: 'center' }}>Customer</TableHeader>
+            <TableHeader width="325px" style={{ textAlign: 'center' }}>Address</TableHeader>
+            <TableHeader width="125px" style={{ textAlign: 'center' }}>Completed Date</TableHeader>
+            <TableHeader width="225px" style={{ textAlign: 'center' }}>Product</TableHeader>
+            <TableHeader width="30px" style={{ textAlign: 'center' }}>Quantity</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Amount</TableHeader>
+            <TableHeader width="50px" style={{ textAlign: 'center' }}>Sizes</TableHeader>
+            <TableHeader width="100px" style={{ textAlign: 'center' }}>Status</TableHeader>
           </TableRow>
         </TableHead>
         <tbody>
@@ -128,12 +169,12 @@ const Complete = () => {
                 <TableRow key={`${order.id}-${item.id}`}>
                   <TableData>{order.name || order.userId}</TableData>
                   <TableData>{order.address || '-'}</TableData>
-                  <TableData>{order.receivedAt?.toDate().toLocaleString() || '-'}</TableData>
-                  <TableData>{item.productName}</TableData>
-                  <TableData>{item.quantity}</TableData>
-                  <TableData>₱{item.price}</TableData>
-                  <TableData>{item.size || '-'}</TableData>
-                  <TableData>
+                  <TableData style={{ textAlign: 'center' }}>{order.receivedAt?.toDate().toLocaleString() || '-'}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.productName}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.quantity}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>₱{item.price}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>{item.size || '-'}</TableData>
+                  <TableData style={{ textAlign: 'center' }}>
                     <button
                       style={{
                         backgroundColor: '#28a745', // green
