@@ -1,9 +1,8 @@
-// components/orderstyle.js
-import styled from 'styled-components';
+import styled from "styled-components";
 
 export const OrdersContainer = styled.div`
   padding: 20px;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: "Segoe UI", sans-serif;
 `;
 
 export const OrdersHeader = styled.h2`
@@ -22,17 +21,15 @@ export const TabItem = styled.div`
   cursor: pointer;
   padding: 10px 16px;
   border-radius: 20px;
-  background-color: ${({ active }) => (active ? '#a166ff' : '#f5f5f5')};
-  color: ${({ active }) => (active ? '#fff' : '#000')};
+  background-color: ${({ active }) => (active ? "#a166ff" : "#f5f5f5")};
+  color: ${({ active }) => (active ? "#fff" : "#000")};
   font-weight: 500;
   transition: background-color 0.3s, color 0.3s;
 
   &:hover {
     background-color: #c9a8ffff;
-    
   }
 `;
-
 
 export const OrdersSummary = styled.div`
   display: flex;

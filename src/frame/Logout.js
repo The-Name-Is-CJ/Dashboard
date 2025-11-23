@@ -1,16 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { signOut } from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
-import { addDoc, collection, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
+import { signOut } from "firebase/auth";
 import {
-  ModalOverlay,
-  ModalContent,
-  ModalTitle,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
   ButtonGroup,
+  CancelButton,
+  ModalContent,
+  ModalOverlay,
+  ModalTitle,
   SaveButton,
-  CancelButton
-} from '../components/dashboardstyles';
+} from "../components/dashboardstyles";
+import { auth, db } from "../firebase";
 
 const Logout = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -49,24 +55,21 @@ const Logout = () => {
     fetchAdmins();
   }, []);
 
-   const handleConfirmLogout = async () => {
+  const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
     setShowConfirmModal(false);
     try {
       const user = auth.currentUser;
 
       if (user) {
-        // ✅ Find the matching admin role
-        const matchedAdmin = adminEmails.find(a => a.email === user.email);
-        const role = matchedAdmin ? matchedAdmin.role : 'Unknown Role';
+        const matchedAdmin = adminEmails.find((a) => a.email === user.email);
+        const role = matchedAdmin ? matchedAdmin.role : "Unknown Role";
 
-        // ✅ Generate a unique log ID
         const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-        // ✅ Add detailed log to Firestore
-        await addDoc(collection(db, 'recentActivityLogs'), {
+        await addDoc(collection(db, "recentActivityLogs"), {
           logID: logID,
-          action: 'logged out',
+          action: "logged out",
           role: role,
           userEmail: user.email,
           timestamp: serverTimestamp(),
@@ -74,10 +77,10 @@ const Logout = () => {
       }
 
       await signOut(auth);
-      navigate('/');
+      navigate("/");
     } catch (error) {
-      console.error('Logout failed:', error);
-      alert('Logout failed. Please try again.');
+      console.error("Logout failed:", error);
+      alert("Logout failed. Please try again.");
       setIsLoggingOut(false);
       setShowConfirmModal(true);
     }
@@ -88,7 +91,7 @@ const Logout = () => {
   };
 
   const handleOverlayClick = (e) => {
-    if (e.target.dataset.overlay === 'true') {
+    if (e.target.dataset.overlay === "true") {
       handleCancelLogout();
     }
   };
@@ -97,14 +100,14 @@ const Logout = () => {
     return (
       <div
         style={{
-          height: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #a166ff, #ebdfff)',
-          color: '#fff',
-          fontSize: '1.2rem',
-          fontWeight: 'bold',
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #a166ff, #ebdfff)",
+          color: "#fff",
+          fontSize: "1.2rem",
+          fontWeight: "bold",
         }}
       >
         Logging you out...
@@ -123,7 +126,7 @@ const Logout = () => {
               <CancelButton onClick={handleCancelLogout}>Cancel</CancelButton>
               <SaveButton
                 onClick={handleConfirmLogout}
-                style={{ backgroundColor: '#A94444' }}
+                style={{ backgroundColor: "#A94444" }}
               >
                 Logout
               </SaveButton>

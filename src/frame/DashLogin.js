@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
-import { addDoc, collection, serverTimestamp, getDoc, doc, } from "firebase/firestore";
-import { db } from "../firebase";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+import { auth, db } from "../firebase";
 
 const DashLogin = () => {
   const [email, setEmail] = useState("");
@@ -45,27 +50,27 @@ const DashLogin = () => {
     fetchAdmins();
   }, []);
 
-
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg("");
 
     try {
-      // Sign in
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const user = userCredential.user;
 
-     
-      const matchedAdmin = adminEmails.find(a => a.email === user.email.toLowerCase());
-
+      const matchedAdmin = adminEmails.find(
+        (a) => a.email === user.email.toLowerCase()
+      );
 
       if (!matchedAdmin) {
         setErrorMsg("Unauthorized user.");
         return;
       }
 
-      // Log activity
       const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       await addDoc(collection(db, "recentActivityLogs"), {
         logID,
@@ -78,7 +83,10 @@ const DashLogin = () => {
       navigate("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-      if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password") {
+      if (
+        error.code === "auth/user-not-found" ||
+        error.code === "auth/wrong-password"
+      ) {
         setErrorMsg("Invalid email or password.");
       } else if (error.code === "auth/invalid-email") {
         setErrorMsg("Email format is invalid.");
@@ -88,16 +96,12 @@ const DashLogin = () => {
     }
   };
 
-
   return (
     <div className="login-page">
-      {/* Background */}
       <div className="curve-bg"></div>
 
-      {/* Welcome Text */}
       <h1 className="welcome-text">Welcome to Admin Dashboard!</h1>
 
-      {/* Login Card */}
       <div className="login-card">
         {errorMsg && <p className="error-msg">{errorMsg}</p>}
 
@@ -141,7 +145,6 @@ const DashLogin = () => {
         </form>
       </div>
 
-      {/* Internal Styles */}
       <style>{`
         .login-page {
           position: relative;
@@ -265,7 +268,7 @@ const DashLogin = () => {
           text-align: center;
         }
 
-        /* Responsive */
+        
         @media (max-width: 768px) {
           .login-card {
             width: 90%;

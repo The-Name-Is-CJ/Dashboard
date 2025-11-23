@@ -7,18 +7,27 @@ export const Colors = {
   black: "#000000",
   gray: "#717171",
   gradient: [
-    "#a166ff", "#a875ff", "#b183ff", "#ba92ff",
-    "#c3a0ff", "#cdb0ff", "#d6bfff", "#e0cfff", "#ebdfff"
-  ]
+    "#a166ff",
+    "#a875ff",
+    "#b183ff",
+    "#ba92ff",
+    "#c3a0ff",
+    "#cdb0ff",
+    "#d6bfff",
+    "#e0cfff",
+    "#ebdfff",
+  ],
 };
 
 const { primary, secondary, white, black, gray } = Colors;
 
 export const ModalOverlay = styled.div`
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background-color: rgba(0,0,0,0.5);
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -30,14 +39,14 @@ export const ModalContent = styled.div`
   padding: 30px;
   border-radius: 16px;
   width: 400px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 `;
 
 export const ModalTitle = styled.h2`
   font-size: 1.75rem;
   color: ${secondary};
   margin-bottom: 1.5rem;
-  font-family: 'Krona One', sans-serif;
+  font-family: "Krona One", sans-serif;
 `;
 
 export const Label = styled.label`
@@ -63,10 +72,9 @@ export const Input = styled.input`
 
    &:focus {
     outline: none;
-    border-color: ${Colors.secondary}; // purple border
+    border-color: ${Colors.secondary}; 
     box-shadow: 0 0 4px ${Colors.secondary};
 `;
-
 
 export const ButtonGroup = styled.div`
   display: flex;
@@ -105,7 +113,6 @@ export const CancelButton = styled.button`
   }
 `;
 
-// ✅ Added these new styles
 export const TableWrapper = styled.div`
   overflow-x: auto;
   width: 200%;

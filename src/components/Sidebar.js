@@ -1,50 +1,49 @@
-import React from 'react';
-import styled from 'styled-components';
-import { Colors } from './dashboardstyles';
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import {
   FaBoxes,
   FaComments,
-  FaStar,
-  FaUser,
   FaSignOutAlt,
-  FaTachometerAlt
-} from 'react-icons/fa';
-import { NavLink } from 'react-router-dom';
+  FaStar,
+  FaTachometerAlt,
+  FaUser,
+} from "react-icons/fa";
+import { NavLink } from "react-router-dom";
+import styled from "styled-components";
+import { db } from "../firebase";
+import { Colors } from "./dashboardstyles";
 
 const { secondary, white, gray } = Colors;
 
-// Sidebar container
 const SidebarContainer = styled.div`
   width: 250px;
   background-color: ${white};
   height: 100vh;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
   padding: 20px;
   position: fixed;
 `;
 
-// Logo with Krona One font
 const Logo = styled.h2`
   color: ${secondary};
-  font-family: 'Krona One', sans-serif; /* ✅ Krona One font */
+  font-family: "Krona One", sans-serif;
   font-size: 1.38rem;
   margin-top: 1rem;
   margin-bottom: 1rem;
   position: relative;
   padding-bottom: 25px;
   &:after {
-    content: '';
+    content: "";
     display: block;
     width: 100%;
     height: 1px;
-    background-color: #ccc; /* subtle line */
+    background-color: #ccc;
     position: absolute;
     bottom: 0;
     left: 0;
   }
 `;
 
-// Navigation items
 const NavItem = styled(NavLink)`
   display: flex;
   align-items: center;
@@ -68,7 +67,31 @@ const NavItem = styled(NavLink)`
   }
 `;
 
+const RedDot = styled.span`
+  width: 10px;
+  height: 10px;
+  background-color: red;
+  border-radius: 50%;
+  margin-left: auto;
+`;
+
 const Sidebar = () => {
+  const [hasUnread, setHasUnread] = useState(false);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "chatMessages"),
+      where("sender", "==", "user"),
+      where("read", "==", false)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setHasUnread(snapshot.size > 0);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <SidebarContainer>
       <Logo>TryFit Admin</Logo>
@@ -87,6 +110,7 @@ const Sidebar = () => {
 
       <NavItem to="/chat">
         <FaComments /> Chat Support
+        {hasUnread && <RedDot />}
       </NavItem>
 
       <NavItem to="/reviews">

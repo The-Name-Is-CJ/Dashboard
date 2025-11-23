@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import styled from 'styled-components'; // <-- move this to top
-import { FaStar, FaUserCircle } from 'react-icons/fa';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { FaStar, FaUserCircle } from "react-icons/fa";
+import styled from "styled-components";
+import { db } from "../firebase";
 
 const Reviews = () => {
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
 
-  // Fetch all products
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
       const prods = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
@@ -22,12 +21,11 @@ const Reviews = () => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch reviews for selected product
   useEffect(() => {
     if (!selectedProduct) return;
     const q = query(
-      collection(db, 'productReviews'),
-      where('productID', '==', selectedProduct.productID) // note: match productID string
+      collection(db, "productReviews"),
+      where("productID", "==", selectedProduct.productID)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -36,12 +34,40 @@ const Reviews = () => {
     });
     return () => unsubscribe();
   }, [selectedProduct]);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
+      const prods = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Sort products by productID
+      prods.sort((a, b) => {
+        if (!a.productID) return 1;
+        if (!b.productID) return -1;
+        // Compare alphanumeric IDs properly
+        return a.productID.localeCompare(b.productID, undefined, {
+          numeric: true,
+        });
+      });
+
+      setProducts(prods);
+
+      if (!selectedProduct && prods.length > 0) setSelectedProduct(prods[0]);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const renderStars = (count) => {
     const stars = [];
     for (let i = 0; i < 5; i++) {
       stars.push(
-        i < count ? <FaStar key={i} /> : <FaStar key={i} style={{ opacity: 0.3 }} />
+        i < count ? (
+          <FaStar key={i} />
+        ) : (
+          <FaStar key={i} style={{ opacity: 0.3 }} />
+        )
       );
     }
     return stars;
@@ -56,8 +82,12 @@ const Reviews = () => {
             selected={selectedProduct?.id === product.id}
             onClick={() => setSelectedProduct(product)}
           >
-            <div>{product.name}</div>
-            <div className="product-id">{product.productID}</div>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <div className="product-id" style={{ fontWeight: "bold" }}>
+                {product.productID} -
+              </div>
+              <div>{product.productName}</div>
+            </div>
           </ProductItem>
         ))}
       </SideNav>
@@ -69,25 +99,25 @@ const Reviews = () => {
             {reviews.map((review) => (
               <ReviewItem key={review.reviewID}>
                 <ReviewerRow>
-                  <FaUserCircle size={20} />
+                  <FaUserCircle size={24} /> {/* slightly bigger icon */}
                   <ReviewInfoText>
                     <div>{review.userName}</div>
-                    <div>Size: {review.size || 'Unknown'}</div>
+                    <div>Size: {review.size || "Unknown"}</div>
                   </ReviewInfoText>
                 </ReviewerRow>
                 <StarRating>{renderStars(review.rating)}</StarRating>
                 <CommentText>{review.comment}</CommentText>
-                <small>
+                <ReviewDate>
                   {review.createdAt
                     ? review.createdAt.toDate
                       ? review.createdAt.toDate().toLocaleString()
-                      : new Date(review.createdAt.seconds * 1000).toLocaleString()
-                    : ''}
-                </small>
+                      : new Date(
+                          review.createdAt.seconds * 1000
+                        ).toLocaleString()
+                    : ""}
+                </ReviewDate>
               </ReviewItem>
             ))}
-
-
           </>
         ) : (
           <p>Select a product to view reviews</p>
@@ -99,8 +129,6 @@ const Reviews = () => {
 
 export default Reviews;
 
-// ================= Styled Components =================
-
 const Container = styled.div`
   display: flex;
   height: 100vh;
@@ -109,26 +137,31 @@ const Container = styled.div`
 `;
 
 const SideNav = styled.div`
-  width: 300px;
+  width: 500px; /* a bit wider */
   background: #d9c6ff;
   overflow-y: auto;
   padding: 1rem;
 `;
 
 const ProductItem = styled.div`
-  padding: 0.8rem;
-  margin-bottom: 0.5rem;
+  width: 100%;
+  padding: 1.2rem; /* slightly more padding */
+  margin-bottom: 0.6rem;
   border-radius: 10px;
-  background: ${(props) => (props.selected ? '#a166ff' : 'transparent')};
-  color: ${(props) => (props.selected ? '#fff' : '#000')};
+  background: ${(props) => (props.selected ? "#a166ff" : "transparent")};
+  color: ${(props) => (props.selected ? "#fff" : "#000")};
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 1.2rem; /* bigger font */
   &:hover {
     background: #b788ff;
     color: #fff;
   }
   .product-id {
-    font-size: 0.8rem;
-    margin-top: 2px;
+    font-size: 1.2rem; /* bigger font for ID as well */
+    margin-top: 0;
+    font-weight: bold; /* keep ID bold */
   }
 `;
 
@@ -136,38 +169,51 @@ const ReviewPanel = styled.div`
   flex: 1;
   padding: 1rem;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 `;
 
 const ReviewItem = styled.div`
+  width: 90%; /* fixed width relative to panel */
+  max-width: 1000px; /* optional max-width */
   background: rgba(255, 255, 255, 0.25);
   border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
 `;
-
 const ReviewerRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.7rem; /* slightly bigger gap */
   flex-wrap: wrap;
 `;
 
 const ReviewInfoText = styled.div`
-  font-size: 0.9rem;
+  font-size: 1rem; /* bigger than before */
   font-weight: bold;
   display: flex;
-  gap: 2rem;
+  gap: 2.5rem;
 `;
 
 const StarRating = styled.div`
   color: gold;
   display: flex;
-  gap: 2px;
-  margin-top: 4px;
+  gap: 3px; /* slightly bigger gap between stars */
+  margin-top: 6px; /* slightly more spacing */
 `;
 
 const CommentText = styled.div`
-  font-size: 0.9rem;
+  font-size: 1.05rem; /* slightly bigger than before */
+  margin-top: 6px;
+  line-height: 1.4;
+`;
+const ReviewDate = styled.small`
+  width: 100%;
+  text-align: right; /* right-aligned date */
+  font-size: 0.8rem;
+  color: #555;
   margin-top: 4px;
-  line-height: 1.3;
 `;
