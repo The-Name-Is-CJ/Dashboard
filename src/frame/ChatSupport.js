@@ -374,6 +374,7 @@ const ChatSupport = () => {
       username: selectedConversation.username,
       text: newMessage.trim(),
       sender: "admin",
+      read: false,
       timestamp: serverTimestamp(),
     });
     setNewMessage("");
