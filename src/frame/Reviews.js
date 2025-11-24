@@ -23,16 +23,20 @@ const Reviews = () => {
 
   useEffect(() => {
     if (!selectedProduct) return;
+
     const q = query(
       collection(db, "productReviews"),
-      where("productID", "==", selectedProduct.productID),
-      where("comment", "!=", "")
+      where("productID", "==", selectedProduct.productID)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((item) => item.comment && item.comment.trim() !== "");
+
       setReviews(data);
     });
+
     return () => unsubscribe();
   }, [selectedProduct]);
 
