@@ -201,12 +201,7 @@ const ToShip = () => {
   }, []);
 
   useEffect(() => {
-    const collectionsToWatch = [
-      "toShip",
-      "toReceive",
-      "completed",
-      "cancelled",
-    ];
+    const collectionsToWatch = ["toReceive", "completed", "cancelled"];
     const unsubscribes = [];
 
     const today = new Date();
@@ -222,9 +217,9 @@ const ToShip = () => {
         if (!u.latestSnapshot) return;
         u.latestSnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.packedAt) {
-            const packedDate = data.packedAt.toDate();
-            if (packedDate >= startOfWeek && packedDate <= today) total += 1;
+          if (data.shippedAt) {
+            const shippedDate = data.shippedAt.toDate();
+            if (shippedDate >= startOfWeek && shippedDate <= today) total += 1;
           }
         });
       });
@@ -277,14 +272,11 @@ const ToShip = () => {
     setLoading(true);
 
     try {
-      // === CHECK IF MULTIPLE ITEMS ARE SELECTED ===
       if (selectedItems && selectedItems.length > 0) {
-        // MULTIPLE ITEMS
         for (const entry of selectedItems) {
           const order = entry.order;
           const item = entry.item;
 
-          // ----- YOUR ORIGINAL SAVE LOGIC (REUSED, UNTOUCHED) -----
           const { id, ...orderDataWithoutId } = order;
 
           await addDoc(collection(db, "toReceive"), {
@@ -332,16 +324,13 @@ const ToShip = () => {
             userEmail: auth.currentUser?.email || "Unknown user",
             timestamp: serverTimestamp(),
           });
-          // ---------------------------------------------------------
         }
       } else {
-        // === SINGLE ITEM ===
         if (!selectedOrder || !selectedItem) return;
 
         const order = selectedOrder;
         const item = selectedItem;
 
-        // ----- YOUR ORIGINAL SAVE LOGIC (UNTOUCHED) -----
         const { id, ...orderDataWithoutId } = order;
 
         await addDoc(collection(db, "toReceive"), {
@@ -389,7 +378,6 @@ const ToShip = () => {
           userEmail: auth.currentUser?.email || "Unknown user",
           timestamp: serverTimestamp(),
         });
-        // -------------------------------------------------
       }
     } catch (err) {
       console.error("Error moving item(s) to toReceive:", err);
@@ -406,7 +394,6 @@ const ToShip = () => {
     setSelectedOrder(order);
     setSelectedItem(item);
 
-    // Put single item inside selectedOrdersList as standard format
     setSelectedItems([{ key: `${order.id}-${item.id}`, order, item }]);
 
     setPopupMessage(`Mark ${item.productName} as shipped?`);
@@ -496,7 +483,7 @@ const ToShip = () => {
               color: "#444",
             }}
           >
-            Total orders waiting to be ship this week:{" "}
+            Total shipped orders this week:{" "}
             <span style={{ fontWeight: "500", color: "#ff6600" }}>
               {weeklyToShipCount}
             </span>
@@ -543,7 +530,6 @@ const ToShip = () => {
               order.items.map((item) => {
                 const key = `${order.id}-${item.id}`;
 
-                // Determine if item is selected
                 const isSelected = selectedItems.some((x) => x.key === key);
 
                 const isRemovable =

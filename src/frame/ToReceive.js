@@ -76,13 +76,7 @@ const ToReceive = () => {
   }, []);
 
   useEffect(() => {
-    const collectionsToWatch = [
-      "orders",
-      "toShip",
-      "toReceive",
-      "completed",
-      "cancelled",
-    ];
+    const collectionsToWatch = ["completed"];
     const unsubscribes = [];
 
     const today = new Date();
@@ -98,14 +92,14 @@ const ToReceive = () => {
         if (!u.latestSnapshot) return;
         u.latestSnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.shippedAt) {
-            const shippedDate = data.shippedAt.toDate();
-            if (shippedDate >= startOfWeek && shippedDate <= today) total += 1;
+          if (data.receivedAt) {
+            const receiveDate = data.receivedAt.toDate();
+            if (receiveDate >= startOfWeek && receiveDate <= today) total += 1;
           }
         });
       });
 
-      setWeeklyToReceiveCount(total); // Use the correct setter
+      setWeeklyToReceiveCount(total);
     };
 
     collectionsToWatch.forEach((col) => {
@@ -194,7 +188,7 @@ const ToReceive = () => {
             color: "#444",
           }}
         >
-          Total orders waiting to be receive this week:{" "}
+          Total received orders this week:{" "}
           <span style={{ fontWeight: "500", color: "#007bff" }}>
             {weeklyToReceiveCount}
           </span>
