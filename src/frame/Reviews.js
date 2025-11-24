@@ -25,7 +25,8 @@ const Reviews = () => {
     if (!selectedProduct) return;
     const q = query(
       collection(db, "productReviews"),
-      where("productID", "==", selectedProduct.productID)
+      where("productID", "==", selectedProduct.productID),
+      where("comment", "!=", "")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -34,6 +35,7 @@ const Reviews = () => {
     });
     return () => unsubscribe();
   }, [selectedProduct]);
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
       const prods = snapshot.docs.map((doc) => ({
@@ -41,11 +43,9 @@ const Reviews = () => {
         ...doc.data(),
       }));
 
-      // Sort products by productID
       prods.sort((a, b) => {
         if (!a.productID) return 1;
         if (!b.productID) return -1;
-        // Compare alphanumeric IDs properly
         return a.productID.localeCompare(b.productID, undefined, {
           numeric: true,
         });
@@ -99,7 +99,7 @@ const Reviews = () => {
             {reviews.map((review) => (
               <ReviewItem key={review.reviewID}>
                 <ReviewerRow>
-                  <FaUserCircle size={24} /> {/* slightly bigger icon */}
+                  <FaUserCircle size={24} />
                   <ReviewInfoText>
                     <div>{review.userName}</div>
                     <div>Size: {review.size || "Unknown"}</div>
@@ -137,7 +137,7 @@ const Container = styled.div`
 `;
 
 const SideNav = styled.div`
-  width: 500px; /* a bit wider */
+  width: 500px;
   background: #d9c6ff;
   overflow-y: auto;
   padding: 1rem;
@@ -145,7 +145,7 @@ const SideNav = styled.div`
 
 const ProductItem = styled.div`
   width: 100%;
-  padding: 1.2rem; /* slightly more padding */
+  padding: 1.2rem;
   margin-bottom: 0.6rem;
   border-radius: 10px;
   background: ${(props) => (props.selected ? "#a166ff" : "transparent")};
@@ -153,15 +153,15 @@ const ProductItem = styled.div`
   cursor: pointer;
   display: flex;
   align-items: center;
-  font-size: 1.2rem; /* bigger font */
+  font-size: 1.2rem;
   &:hover {
     background: #b788ff;
     color: #fff;
   }
   .product-id {
-    font-size: 1.2rem; /* bigger font for ID as well */
+    font-size: 1.2rem;
     margin-top: 0;
-    font-weight: bold; /* keep ID bold */
+    font-weight: bold;
   }
 `;
 
@@ -174,8 +174,8 @@ const ReviewPanel = styled.div`
 `;
 
 const ReviewItem = styled.div`
-  width: 90%; /* fixed width relative to panel */
-  max-width: 1000px; /* optional max-width */
+  width: 90%;
+  max-width: 1000px;
   background: rgba(255, 255, 255, 0.25);
   border-radius: 10px;
   padding: 16px;
@@ -187,12 +187,12 @@ const ReviewItem = styled.div`
 const ReviewerRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.7rem; /* slightly bigger gap */
+  gap: 0.7rem;
   flex-wrap: wrap;
 `;
 
 const ReviewInfoText = styled.div`
-  font-size: 1rem; /* bigger than before */
+  font-size: 1rem;
   font-weight: bold;
   display: flex;
   gap: 2.5rem;
@@ -201,18 +201,18 @@ const ReviewInfoText = styled.div`
 const StarRating = styled.div`
   color: gold;
   display: flex;
-  gap: 3px; /* slightly bigger gap between stars */
-  margin-top: 6px; /* slightly more spacing */
+  gap: 3px;
+  margin-top: 6px;
 `;
 
 const CommentText = styled.div`
-  font-size: 1.05rem; /* slightly bigger than before */
+  font-size: 1.05rem;
   margin-top: 6px;
   line-height: 1.4;
 `;
 const ReviewDate = styled.small`
   width: 100%;
-  text-align: right; /* right-aligned date */
+  text-align: right;
   font-size: 0.8rem;
   color: #555;
   margin-top: 4px;

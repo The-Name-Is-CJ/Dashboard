@@ -192,7 +192,6 @@ const Orders = () => {
     const updateWeeklyCount = () => {
       let total = 0;
 
-      // Combine all orders from all collections
       unsubscribes.forEach((u) => {
         if (!u.latestSnapshot) return;
         u.latestSnapshot.forEach((docSnap) => {
@@ -257,7 +256,7 @@ const Orders = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-        setOrders(fetchedOrders); // only update orders state
+        setOrders(fetchedOrders);
       } catch (err) {
         console.error("Error fetching orders:", err);
       }
@@ -339,7 +338,6 @@ const Orders = () => {
 
         setSelectedOrders([]);
       } else {
-        // SINGLE ORDER (status button)
         const orderToMove = orders.find((o) => o.id === selectedOrderId);
         if (!orderToMove) return;
 
@@ -523,7 +521,7 @@ const Orders = () => {
                 <TableRow
                   key={item.id}
                   onClick={() => {
-                    if (isRemovable) return; // <-- row is unclickable if removable
+                    if (isRemovable) return;
                     if (selectedOrders.includes(order.id)) {
                       setSelectedOrders((prev) =>
                         prev.filter((id) => id !== order.id)
@@ -543,7 +541,7 @@ const Orders = () => {
                       type="checkbox"
                       checked={selectedOrders.includes(order.id)}
                       readOnly
-                      disabled={isRemovable} // <-- disable checkbox if removable
+                      disabled={isRemovable}
                     />
                   </TableData>
 
@@ -614,7 +612,7 @@ const Orders = () => {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
         loading={loading}
-        selectedOrdersList={orders.filter((o) => selectedOrders.includes(o.id))} // <-- added
+        selectedOrdersList={orders.filter((o) => selectedOrders.includes(o.id))}
       />
 
       {showRemoveModal && (

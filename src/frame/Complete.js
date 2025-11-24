@@ -93,7 +93,7 @@ const Complete = () => {
         });
       });
 
-      setWeeklyCompletedCount(total); // ✅ use the correct setter
+      setWeeklyCompletedCount(total);
     };
 
     collectionsToWatch.forEach((col) => {
