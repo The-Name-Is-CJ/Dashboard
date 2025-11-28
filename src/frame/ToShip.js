@@ -161,8 +161,6 @@ const ToShip = () => {
   const [confirmOrder, setConfirmOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [removeId, setRemoveId] = useState(null);
-  const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [weeklyToShipCount, setWeeklyToShipCount] = useState(0);
   const [role, setRole] = useState("Unknown");
   const [popupVisible, setPopupVisible] = useState(false);
@@ -170,6 +168,7 @@ const ToShip = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
+  const user = auth.currentUser;
 
   const filteredOrders = orders
     .map((order) => ({
@@ -241,31 +240,29 @@ const ToShip = () => {
   }, []);
 
   useEffect(() => {
-    const fetchRole = async () => {
+    const fetchSellerRole = async () => {
       try {
-        const userEmail = auth.currentUser?.email;
-        if (!userEmail) return;
-
-        const q = query(
-          collection(db, "admins"),
-          where("email", "==", userEmail)
-        );
-
-        const snap = await getDocs(q);
-
-        if (!snap.empty) {
-          const data = snap.docs[0].data();
-          setRole(data.role || "Admin");
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          if (sellerDoc.email === user?.email) {
+            setRole("Seller");
+          } else {
+            setRole("Seller");
+          }
         } else {
-          setRole("Customer");
+          setRole("Seller");
         }
       } catch (err) {
-        console.error("Error fetching admin role:", err);
+        console.error("Error fetching seller role:", err);
+        setRole("Unknown");
       }
     };
 
-    fetchRole();
-  }, []);
+    if (user?.email) {
+      fetchSellerRole();
+    }
+  }, [user]);
 
   const handleConfirmYes = async () => {
     if (loading) return;
@@ -403,11 +400,12 @@ const ToShip = () => {
   const handleConfirmNo = () => setConfirmOrder(null);
 
   const tabs = [
-    { name: "Orders", path: "/orders" },
-    { name: "To Ship", path: "/orders/toship" },
-    { name: "To Receive", path: "/orders/toreceive" },
-    { name: "Cancelled", path: "/orders/cancelled" },
-    { name: "Completed", path: "/orders/complete" },
+    { name: "Orders", path: "/seller/orders" },
+    { name: "To Ship", path: "/seller/orders/toship" },
+    { name: "To Receive", path: "/seller/orders/toreceive" },
+    { name: "Cancelled", path: "/seller/orders/cancelled" },
+    { name: "Completed", path: "/seller/orders/complete" },
+    { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
 
   return (
@@ -587,43 +585,21 @@ const ToShip = () => {
                       {item.size || "-"}
                     </TableData>
 
-                    <TableData>
-                      {!isRemovable ? (
-                        <button
-                          disabled
-                          style={{
-                            backgroundColor: "#9747FF",
-                            color: "#fff",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            fontWeight: "bold",
-                            fontSize: "0.9rem",
-                            border: "none",
-                          }}
-                        >
-                          {order.status || "Packed"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRemoveId(order.id);
-                            setShowRemoveModal(true);
-                          }}
-                          style={{
-                            backgroundColor: "#ff4444",
-                            color: "#fff",
-                            padding: "4px 10px",
-                            borderRadius: "6px",
-                            fontWeight: "bold",
-                            fontSize: "0.9rem",
-                            cursor: "pointer",
-                            border: "none",
-                          }}
-                        >
-                          Remove
-                        </button>
-                      )}
+                    <TableData style={{ textAlign: "center" }}>
+                      <button
+                        disabled
+                        style={{
+                          backgroundColor: "#9747FF",
+                          color: "#fff",
+                          padding: "4px 10px",
+                          borderRadius: "6px",
+                          fontWeight: "bold",
+                          fontSize: "0.9rem",
+                          border: "none",
+                        }}
+                      >
+                        {order.status || "Packed"}
+                      </button>
                     </TableData>
                   </TableRow>
                 );
@@ -683,145 +659,6 @@ const ToShip = () => {
 
             <button style={noButtonStyle} onClick={handleConfirmNo}>
               No
-            </button>
-          </div>
-        </div>
-      )}
-      {showRemoveModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "10px",
-              width: "300px",
-              textAlign: "center",
-            }}
-          >
-            <h3>Delete Record?</h3>
-            <p>Are you sure you want to remove this item?</p>
-
-            <button
-              onClick={async () => {
-                if (loading) return;
-                setLoading(true);
-
-                try {
-                  const toShipDoc = await getDoc(doc(db, "toShip", removeId));
-                  if (!toShipDoc.exists()) throw new Error("Order not found.");
-
-                  const orderData = toShipDoc.data();
-
-                  const items = orderData.items || [];
-
-                  for (const item of items) {
-                    const productID = item.productId;
-                    const size = item.size;
-                    const qtyToRestore = item.quantity;
-
-                    if (!productID || !size || !qtyToRestore) {
-                      console.warn(
-                        "Missing product data, skipping stock restore."
-                      );
-                      continue;
-                    }
-
-                    const productRef = doc(db, "products", productID);
-                    const productSnap = await getDoc(productRef);
-
-                    if (!productSnap.exists()) {
-                      console.warn(`Product ${productID} not found. Skipping.`);
-                      continue;
-                    }
-
-                    const productData = productSnap.data();
-                    const currentStock = productData.stock || {};
-                    const currentSizeStock = currentStock[size] || 0;
-
-                    const updatedSizeStock = currentSizeStock + qtyToRestore;
-
-                    let updatedTotalStock = 0;
-                    Object.keys(currentStock).forEach((sz) => {
-                      if (sz === size) {
-                        updatedTotalStock += updatedSizeStock;
-                      } else {
-                        updatedTotalStock += currentStock[sz];
-                      }
-                    });
-
-                    await updateDoc(productRef, {
-                      stock: {
-                        ...currentStock,
-                        [size]: updatedSizeStock,
-                      },
-                      totalStock: updatedTotalStock,
-                    });
-
-                    console.log(
-                      `Restored ${qtyToRestore} pcs of size ${size} for product ${productID}.`
-                    );
-                  }
-
-                  await addDoc(collection(db, "recentActivityLogs"), {
-                    logID: `LOG-${Date.now()}-${Math.floor(
-                      Math.random() * 1000
-                    )}`,
-                    action: `Order (${orderData.orderId}) is deleted`,
-                    role: role,
-                    userEmail: auth.currentUser?.email || "Unknown user",
-                    timestamp: serverTimestamp(),
-                  });
-
-                  await deleteDoc(doc(db, "toShip", removeId));
-
-                  setShowRemoveModal(false);
-                  setRemoveId(null);
-                } catch (error) {
-                  console.error("Error deleting record:", error);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              style={{
-                background: "#ff4444",
-                color: "white",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                border: "none",
-                marginRight: "10px",
-                cursor: "pointer",
-              }}
-            >
-              {loading ? "Deleting…" : "Yes, Delete"}
-            </button>
-
-            <button
-              onClick={() => {
-                setShowRemoveModal(false);
-                setRemoveId(null);
-              }}
-              style={{
-                background: "#ccc",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                border: "none",
-              }}
-            >
-              Cancel
             </button>
           </div>
         </div>

@@ -167,8 +167,6 @@ const Orders = () => {
   const [role, setRole] = useState("Unknown");
   const user = auth.currentUser;
   const [loading, setLoading] = useState(false);
-  const [removeId, setRemoveId] = useState(null);
-  const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [weeklyOrderCount, setWeeklyOrderCount] = useState(0);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [bulkAction, setBulkAction] = useState(false);
@@ -180,6 +178,7 @@ const Orders = () => {
       "toReceive",
       "completed",
       "cancelled",
+      "return_refund",
     ];
     const unsubscribes = [];
 
@@ -220,31 +219,29 @@ const Orders = () => {
   }, []);
 
   useEffect(() => {
-    const fetchRole = async () => {
+    const fetchSellerRole = async () => {
       try {
-        const userEmail = auth.currentUser?.email;
-        if (!userEmail) return;
-
-        const q = query(
-          collection(db, "admins"),
-          where("email", "==", userEmail)
-        );
-
-        const snap = await getDocs(q);
-
-        if (!snap.empty) {
-          const data = snap.docs[0].data();
-          setRole(data.role || "Admin");
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          if (sellerDoc.email === user?.email) {
+            setRole("Seller");
+          } else {
+            setRole("Seller");
+          }
         } else {
-          setRole("Customer");
+          setRole("Seller");
         }
       } catch (err) {
-        console.error("Error fetching admin role:", err);
+        console.error("Error fetching seller role:", err);
+        setRole("Unknown");
       }
     };
 
-    fetchRole();
-  }, []);
+    if (user?.email) {
+      fetchSellerRole();
+    }
+  }, [user]);
 
   useEffect(() => {
     const ordersRef = collection(db, "orders");
@@ -266,28 +263,32 @@ const Orders = () => {
   }, []);
 
   const tabs = [
-    { name: "Orders", path: "/orders" },
-    { name: "To Ship", path: "/orders/toship" },
-    { name: "To Receive", path: "/orders/toreceive" },
-    { name: "Cancelled", path: "/orders/cancelled" },
-    { name: "Completed", path: "/orders/complete" },
+    { name: "Orders", path: "/seller/orders" },
+    { name: "To Ship", path: "/seller/orders/toship" },
+    { name: "To Receive", path: "/seller/orders/toreceive" },
+    { name: "Cancelled", path: "/seller/orders/cancelled" },
+    { name: "Completed", path: "/seller/orders/complete" },
+    { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
 
   const filterOrders = () => {
     const path = location.pathname;
     switch (path) {
-      case "/orders/toship":
+      case "/seller/orders/toship":
         return orders.filter((o) => o.status === "To Ship");
-      case "/orders/toreceive":
+      case "/seller/orders/toreceive":
         return orders.filter((o) => o.status === "To Receive");
-      case "/orders/cancelled":
+      case "/seller/orders/cancelled":
         return orders.filter((o) => o.status === "Cancelled");
-      case "/orders/complete":
+      case "/seller/orders/complete":
         return orders.filter((o) => o.status === "Complete");
+      case "/seller/orders/return_refund":
+        return orders.filter((o) => o.status === "Return/Refund");
       default:
         return orders;
     }
   };
+
   const displayedOrders = filterOrders();
   const filteredOrders = displayedOrders
     .filter((order) => order.orderId)
@@ -509,99 +510,67 @@ const Orders = () => {
         </TableHead>
         <tbody>
           {filteredOrders.map((order) =>
-            order.items.map((item) => {
-              const isRemovable =
-                !order.name ||
-                order.name.trim() === "" ||
-                order.name === "Unknown" ||
-                order.name === "User not found" ||
-                !order.userId;
+            order.items.map((item) => (
+              <TableRow
+                key={item.id}
+                onClick={() => {
+                  if (selectedOrders.includes(order.id)) {
+                    setSelectedOrders((prev) =>
+                      prev.filter((id) => id !== order.id)
+                    );
+                  } else {
+                    setSelectedOrders((prev) => [...prev, order.id]);
+                  }
+                }}
+                style={{
+                  backgroundColor: selectedOrders.includes(order.id)
+                    ? "#f0f0ff"
+                    : "transparent",
+                }}
+              >
+                <TableData style={{ textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedOrders.includes(order.id)}
+                    readOnly
+                  />
+                </TableData>
 
-              return (
-                <TableRow
-                  key={item.id}
-                  onClick={() => {
-                    if (isRemovable) return;
-                    if (selectedOrders.includes(order.id)) {
-                      setSelectedOrders((prev) =>
-                        prev.filter((id) => id !== order.id)
-                      );
-                    } else {
-                      setSelectedOrders((prev) => [...prev, order.id]);
-                    }
-                  }}
-                  style={{
-                    backgroundColor: selectedOrders.includes(order.id)
-                      ? "#f0f0ff"
-                      : "transparent",
-                  }}
-                >
-                  <TableData style={{ textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedOrders.includes(order.id)}
-                      readOnly
-                      disabled={isRemovable}
-                    />
-                  </TableData>
-
-                  <TableData>{order.name}</TableData>
-                  <TableData>{order.address || "-"}</TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {order.createdAt?.toDate().toLocaleString()}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.productName}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.quantity}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    ₱{order.total}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.size || "-"}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {isRemovable ? (
-                      <button
-                        onClick={() => {
-                          setRemoveId(order.id);
-                          setShowRemoveModal(true);
-                        }}
-                        style={{
-                          backgroundColor: "#ff4444",
-                          color: "#fff",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          fontWeight: "bold",
-                          fontSize: "0.9rem",
-                          cursor: "pointer",
-                          border: "none",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        style={{
-                          backgroundColor: "#9747FF",
-                          color: "#fff",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          fontWeight: "bold",
-                          fontSize: "0.9rem",
-                          border: "none",
-                        }}
-                      >
-                        {order.status || "Packed"}
-                      </button>
-                    )}
-                  </TableData>
-                </TableRow>
-              );
-            })
+                <TableData>{order.name}</TableData>
+                <TableData>{order.address || "-"}</TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {order.createdAt?.toDate().toLocaleString()}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {item.productName}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {item.quantity}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  ₱{order.total}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {item.size || "-"}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  <button
+                    disabled
+                    style={{
+                      backgroundColor: "#9747FF",
+                      color: "#fff",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      fontWeight: "bold",
+                      fontSize: "0.9rem",
+                      border: "none",
+                    }}
+                  >
+                    {order.status || "Packed"}
+                  </button>
+                </TableData>
+              </TableRow>
+            ))
           )}
         </tbody>
       </OrdersTable>
@@ -614,129 +583,6 @@ const Orders = () => {
         loading={loading}
         selectedOrdersList={orders.filter((o) => selectedOrders.includes(o.id))}
       />
-
-      {showRemoveModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "10px",
-              width: "300px",
-              height: "180px",
-              textAlign: "center",
-            }}
-          >
-            <h3>Delete Record?</h3>
-            <p
-              style={{
-                marginBottom: "20px",
-                marginTop: "10px",
-              }}
-            >
-              Are you sure you want to remove this item?
-            </p>
-
-            <button
-              onClick={async () => {
-                if (loading) return;
-                setLoading(true);
-
-                try {
-                  const orderDoc = await getDoc(doc(db, "orders", removeId));
-                  if (!orderDoc.exists()) throw new Error("Order not found.");
-
-                  const orderData = orderDoc.data();
-                  const items = orderData.items || [];
-
-                  for (const item of items) {
-                    const productID = item.productId;
-                    const size = item.size;
-                    const qtyToRestore = item.quantity;
-
-                    if (!productID || !size || !qtyToRestore) continue;
-
-                    const productRef = doc(db, "products", productID);
-                    const productSnap = await getDoc(productRef);
-                    if (!productSnap.exists()) continue;
-
-                    const productData = productSnap.data();
-                    const currentStock = productData.stock || {};
-                    const existingStock = currentStock[size] || 0;
-
-                    const updatedStock = existingStock + qtyToRestore;
-
-                    let updatedTotalStock = 0;
-                    Object.keys(currentStock).forEach((sz) => {
-                      updatedTotalStock +=
-                        sz === size ? updatedStock : currentStock[sz];
-                    });
-
-                    await updateDoc(productRef, {
-                      stock: {
-                        ...currentStock,
-                        [size]: updatedStock,
-                      },
-                      totalStock: updatedTotalStock,
-                    });
-                  }
-
-                  await deleteDoc(doc(db, "orders", removeId));
-
-                  setShowRemoveModal(false);
-                  setRemoveId(null);
-                } catch (error) {
-                  console.error("Error deleting record:", error);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              style={{
-                background: "#ff4444",
-                color: "white",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                border: "none",
-                marginRight: "10px",
-                cursor: "pointer",
-                width: "40%",
-              }}
-            >
-              {loading ? "Deleting…" : "Yes, Delete"}
-            </button>
-
-            <button
-              onClick={() => {
-                setShowRemoveModal(false);
-                setRemoveId(null);
-              }}
-              style={{
-                background: "#ccc",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                border: "none",
-                width: "40%",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </OrdersContainer>
   );
 };

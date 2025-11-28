@@ -51,9 +51,6 @@ const ToReceive = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [removeId, setRemoveId] = useState(null);
-  const [showRemoveModal, setShowRemoveModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [weeklyToReceiveCount, setWeeklyToReceiveCount] = useState(0);
 
   useEffect(() => {
@@ -125,11 +122,12 @@ const ToReceive = () => {
     .filter((order) => order.items.length > 0);
 
   const tabs = [
-    { name: "Orders", path: "/orders" },
-    { name: "To Ship", path: "/orders/toship" },
-    { name: "To Receive", path: "/orders/toreceive" },
-    { name: "Cancelled", path: "/orders/cancelled" },
-    { name: "Completed", path: "/orders/complete" },
+    { name: "Orders", path: "/seller/orders" },
+    { name: "To Ship", path: "/seller/orders/toship" },
+    { name: "To Receive", path: "/seller/orders/toreceive" },
+    { name: "Cancelled", path: "/seller/orders/cancelled" },
+    { name: "Completed", path: "/seller/orders/complete" },
+    { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
 
   return (
@@ -247,48 +245,21 @@ const ToReceive = () => {
                     {item.size || "-"}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
-                    {order.name &&
-                    order.name.trim() !== "" &&
-                    order.name !== "Unknown" &&
-                    order.name !== "User not found" &&
-                    order.userId &&
-                    order.userId !== "" &&
-                    order.userId !== null ? (
-                      <button
-                        style={{
-                          backgroundColor: "#007bff",
-                          color: "#fff",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          fontWeight: "bold",
-                          fontSize: "0.9rem",
-                          cursor: "default",
-                          border: "none",
-                        }}
-                        disabled
-                      >
-                        To Receive
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setRemoveId(order.id);
-                          setShowRemoveModal(true);
-                        }}
-                        style={{
-                          backgroundColor: "#ff4444",
-                          color: "#fff",
-                          padding: "4px 10px",
-                          borderRadius: "6px",
-                          fontWeight: "bold",
-                          fontSize: "0.9rem",
-                          cursor: "pointer",
-                          border: "none",
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
+                    <button
+                      style={{
+                        backgroundColor: "#007bff",
+                        color: "#fff",
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        fontWeight: "bold",
+                        fontSize: "0.9rem",
+                        cursor: "default",
+                        border: "none",
+                      }}
+                      disabled
+                    >
+                      To Receive
+                    </button>
                   </TableData>
                 </TableRow>
               ))
@@ -305,129 +276,6 @@ const ToReceive = () => {
           )}
         </tbody>
       </OrdersTable>
-      {showRemoveModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "10px",
-              width: "300px",
-              textAlign: "center",
-            }}
-          >
-            <h3>Delete Record?</h3>
-            <p>Are you sure you want to remove this item?</p>
-
-            <button
-              onClick={async () => {
-                if (isLoading) return;
-                setIsLoading(true);
-
-                try {
-                  const toReceiveDoc = await getDoc(
-                    doc(db, "toReceive", removeId)
-                  );
-                  if (!toReceiveDoc.exists())
-                    throw new Error("Order not found.");
-
-                  const orderData = toReceiveDoc.data();
-                  const items = orderData.items || [];
-
-                  for (const item of items) {
-                    const productID = item.productId;
-                    const size = item.size;
-                    const qtyToRestore = item.quantity;
-
-                    if (!productID || !size || !qtyToRestore) {
-                      console.warn("Missing product data. Skipping restore.");
-                      continue;
-                    }
-
-                    const productRef = doc(db, "products", productID);
-                    const productSnap = await getDoc(productRef);
-
-                    if (!productSnap.exists()) {
-                      console.warn(`Product ${productID} not found. Skipping.`);
-                      continue;
-                    }
-
-                    const productData = productSnap.data();
-                    const currentStock = productData.stock || {};
-                    const currentSizeStock = currentStock[size] || 0;
-
-                    const updatedSizeStock = currentSizeStock + qtyToRestore;
-
-                    let updatedTotalStock = 0;
-                    Object.keys(currentStock).forEach((sz) => {
-                      updatedTotalStock +=
-                        sz === size ? updatedSizeStock : currentStock[sz];
-                    });
-
-                    await updateDoc(productRef, {
-                      stock: {
-                        ...currentStock,
-                        [size]: updatedSizeStock,
-                      },
-                      totalStock: updatedTotalStock,
-                    });
-                  }
-
-                  await deleteDoc(doc(db, "toReceive", removeId));
-
-                  setShowRemoveModal(false);
-                  setRemoveId(null);
-                } catch (error) {
-                  console.error("Error deleting record:", error);
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              style={{
-                background: "#ff4444",
-                color: "white",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                border: "none",
-                marginRight: "10px",
-                cursor: "pointer",
-              }}
-            >
-              {" "}
-              {isLoading ? "Deleting…" : "Yes, Delete"}
-            </button>
-
-            <button
-              onClick={() => {
-                setShowRemoveModal(false);
-                setRemoveId(null);
-              }}
-              style={{
-                background: "#ccc",
-                padding: "8px 15px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                border: "none",
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </OrdersContainer>
   );
 };

@@ -316,7 +316,7 @@ const formatTimestamp = (timestamp) => {
 
 const ChatSupport = () => {
   const db = getFirestore();
-  const adminId = auth.currentUser?.uid || "admin";
+  const sellerId = auth.currentUser?.uid || "seller";
 
   const [allMessages, setAllMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -373,7 +373,7 @@ const ChatSupport = () => {
       userId: selectedConvId,
       username: selectedConversation.username,
       text: newMessage.trim(),
-      sender: "admin",
+      sender: "seller",
       read: false,
       timestamp: serverTimestamp(),
     });
@@ -387,7 +387,7 @@ const ChatSupport = () => {
   const hasNewMessage = (conv) => {
     const lastMsg = conv.messages[conv.messages.length - 1];
     if (!lastMsg) return false;
-    return lastMsg.sender !== "admin" && lastMsg.read === false;
+    return lastMsg.sender !== "seller" && lastMsg.read === false;
   };
 
   const handleSelectConv = async (userId) => {
@@ -397,7 +397,7 @@ const ChatSupport = () => {
 
     if (conv) {
       const unreadUserMessages = conv.messages.filter(
-        (msg) => msg.sender !== "admin" && msg.read !== true
+        (msg) => msg.sender !== "seller" && msg.read !== true
       );
 
       for (const msg of unreadUserMessages) {
@@ -452,13 +452,13 @@ const ChatSupport = () => {
       return (
         <React.Fragment key={msg.id}>
           {showDate && <DateDivider>{date}</DateDivider>}
-          <MessageWrapper isSender={msg.sender === "admin"}>
-            <MessageBubble isSender={msg.sender === "admin"}>
+          <MessageWrapper isSender={msg.sender === "seller"}>
+            <MessageBubble isSender={msg.sender === "seller"}>
               {msg.text}
             </MessageBubble>
             <HoverTimestamp
               className="hover-time"
-              isSender={msg.sender === "admin"}
+              isSender={msg.sender === "seller"}
             >
               {shortDate} - {time}
             </HoverTimestamp>
@@ -489,7 +489,6 @@ const ChatSupport = () => {
     }
     return colors[index];
   };
-
   return (
     <Container>
       <ChatList>

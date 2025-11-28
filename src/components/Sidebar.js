@@ -96,32 +96,28 @@ const Sidebar = () => {
     <SidebarContainer>
       <Logo>TryFit Admin</Logo>
 
-      <NavItem to="/dashboard">
+      <NavItem to="/seller/sellerdashboard">
         <FaTachometerAlt /> Dashboard
       </NavItem>
 
-      <NavItem to="/inventory">
+      <NavItem to="/seller/inventory">
         <FaBoxes /> Product List
       </NavItem>
 
-      <NavItem to="/orders">
+      <NavItem to="/seller/orders">
         <FaBoxes /> Orders
       </NavItem>
 
-      <NavItem to="/chat">
+      <NavItem to="/seller/chat">
         <FaComments /> Chat Support
         {hasUnread && <RedDot />}
       </NavItem>
 
-      <NavItem to="/reviews">
+      <NavItem to="/seller/reviews">
         <FaStar /> Reviews
       </NavItem>
 
-      <NavItem to="/profile">
-        <FaUser /> Admin Management
-      </NavItem>
-
-      <NavItem to="/logout">
+      <NavItem to="/seller/logout">
         <FaSignOutAlt /> Logout
       </NavItem>
     </SidebarContainer>

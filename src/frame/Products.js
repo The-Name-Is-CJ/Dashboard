@@ -6,10 +6,11 @@ import {
   getDocs,
   serverTimestamp,
   updateDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
-
+import { FaCheck } from "react-icons/fa";
 import {
   CancelButton,
   Input,
@@ -48,9 +49,11 @@ const Products = () => {
   });
 
   const [editProduct, setEditProduct] = useState(null);
-
+  const [originalData, setOriginalData] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, id: null });
   const [productToDelete, setProductToDelete] = useState(null);
+  const [arProducts, setArProducts] = useState([]);
+  const [showArModal, setShowArModal] = useState(false);
 
   const subCategoryMap = {
     Top: ["T-Shirt", "Longsleeves"],
@@ -58,27 +61,37 @@ const Products = () => {
   };
 
   useEffect(() => {
-    const fetchRole = async () => {
+    const unsubscribe = onSnapshot(collection(db, "arproducts"), (snapshot) => {
+      const available = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((ar) => !ar.inUsed); // only show AR not in use
+      setArProducts(available);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const fetchSellerRole = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "admins"));
-        let foundRole = "Unknown";
-
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.mainAdmin === user?.email) foundRole = "Main Admin";
-          else if (data.subAdmin1 === user?.email) foundRole = "Admin 1";
-          else if (data.subAdmin2 === user?.email) foundRole = "Admin 2";
-          else if (data.subAdmin3 === user?.email) foundRole = "Admin 3";
-        });
-
-        setRole(foundRole);
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          if (sellerDoc.email === user?.email) {
+            setRole("Seller");
+          } else {
+            setRole("Unknown");
+          }
+        } else {
+          setRole("Unknown");
+        }
       } catch (err) {
-        console.error("Error fetching role:", err);
+        console.error("Error fetching seller role:", err);
+        setRole("Unknown");
       }
     };
 
     if (user?.email) {
-      fetchRole();
+      fetchSellerRole();
     }
   }, [user]);
 
@@ -150,8 +163,10 @@ const Products = () => {
     if (
       !newProduct.name ||
       !newProduct.price ||
+      !newProduct.delivery ||
       !newProductCategory.main ||
-      !newProductCategory.sub
+      !newProductCategory.sub ||
+      !newProduct.arUrl
     ) {
       alert("Please fill in all required fields.");
       return;
@@ -170,8 +185,6 @@ const Products = () => {
         productName: newProduct.name,
         price: Number(newProduct.price),
         delivery: formatDelivery(newProduct.delivery),
-        imageUrl: newProduct.imageUrl || "",
-        arUrl: newProduct.arUrl || "",
         description: newProduct.description || "",
         rating: 0,
         sold: 0,
@@ -180,6 +193,8 @@ const Products = () => {
         categorySub: newProductCategory.sub,
         sizes: SIZE_OPTIONS,
         totalStock: totalStock,
+        imageUrl: newProduct.imageUrl || "/asset/icon.png", // save image
+        arUrl: newProduct.arUrl,
         createdAt: serverTimestamp(),
         editedAt: null,
       });
@@ -224,8 +239,6 @@ const Products = () => {
         productName: editProduct.productName,
         price: Number(editProduct.price),
         delivery: formatDelivery(editProduct.delivery),
-        imageUrl: editProduct.imageUrl || "",
-        arUrl: editProduct.arUrl || "",
         description: editProduct.description || "",
         stock: updatedStock,
         totalStock: totalStock,
@@ -235,18 +248,38 @@ const Products = () => {
         editedAt: serverTimestamp(),
       });
 
+      const changes = [];
+      if (originalData.productName !== editProduct.productName)
+        changes.push("Name");
+      if (originalData.price !== Number(editProduct.price))
+        changes.push("Price");
+      if (originalData.delivery !== formatDelivery(editProduct.delivery))
+        changes.push("Delivery");
+      if (originalData.imageUrl !== editProduct.imageUrl)
+        changes.push("Image URL");
+      if (originalData.arUrl !== editProduct.arUrl) changes.push("AR URL");
+      if (originalData.description !== editProduct.description)
+        changes.push("Description");
+      if (JSON.stringify(originalData.stock) !== JSON.stringify(updatedStock))
+        changes.push("Stock");
+      if (originalData.categoryMain !== editProduct.categoryMain)
+        changes.push("Main Category");
+      if (originalData.categorySub !== editProduct.categorySub)
+        changes.push("Sub Category");
+
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email || "Unknown user",
         role: role,
-        action: "Edit product",
-        productId: editProduct.id,
+        action: `Edited product's ${changes.join(", ")}`,
+        productId: editProduct.productID,
         productName: editProduct.productName,
         timestamp: serverTimestamp(),
       });
 
       fetchProducts();
       setEditProduct(null);
+      setOriginalData(null);
     } catch (error) {
       console.error("Error updating product:", error);
       alert("Failed to update product.");
@@ -266,7 +299,7 @@ const Products = () => {
         userEmail: user?.email ?? "Unknown user",
         role: role ?? "Unknown role",
         action: "deleted product",
-        productId: deleteConfirm.id,
+        productId: deleteConfirm.productID,
         productName: productToDelete?.productName ?? "Unknown product",
         timestamp: serverTimestamp(),
       });
@@ -286,8 +319,22 @@ const Products = () => {
       setEditProduct(null);
       setDeleteConfirm({ show: false, id: null });
       setProductToDelete(null);
-      setNewProductCategory({ main: "", sub: "" });
     }
+  };
+
+  const closeArModal = (e) => {
+    if (e.target.dataset.overlay === "ar-overlay") {
+      setShowArModal(false);
+    }
+  };
+
+  const selectArProduct = (ar) => {
+    setNewProduct({
+      ...newProduct,
+      arUrl: ar.arUrl,
+      imageUrl: ar.imageUrl,
+    });
+    setShowArModal(false);
   };
 
   return (
@@ -387,7 +434,10 @@ const Products = () => {
 
             <div className="actions-row">
               <button
-                onClick={() => setEditProduct(product)}
+                onClick={() => {
+                  setEditProduct(product);
+                  setOriginalData(product);
+                }}
                 className="edit-button"
               >
                 Edit
@@ -436,7 +486,30 @@ const Products = () => {
                 }}
               >
                 <ModalTitle>Add Product</ModalTitle>
-                <Label>Name</Label>
+                <Label>
+                  Choose AR Product{" "}
+                  <span style={{ color: "red" }}>(*Required)</span>
+                </Label>
+                <div style={{ marginBottom: "1rem" }}>
+                  <SaveButton
+                    onClick={() => setShowArModal(true)}
+                    style={{
+                      backgroundColor: newProduct.arUrl ? "#6a2edb" : "#8a4fff", // darker if selected
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    {newProduct.arUrl
+                      ? "AR Product Selected"
+                      : "Choose AR Product"}
+                    {newProduct.arUrl && <FaCheck color="lightgreen" />}
+                  </SaveButton>
+                </div>
+                <Label>
+                  Name <span style={{ color: "red" }}>(*Required)</span>
+                </Label>
                 <Input
                   value={newProduct.name}
                   placeholder="Enter Product Name"
@@ -448,7 +521,9 @@ const Products = () => {
                     })
                   }
                 />
-                <Label>Price</Label>
+                <Label>
+                  Price <span style={{ color: "red" }}>(*Required)</span>
+                </Label>
                 <Input
                   type="number"
                   min="1"
@@ -461,29 +536,15 @@ const Products = () => {
                     setNewProduct({ ...newProduct, price: val });
                   }}
                 />
-                <Label>Delivery</Label>
+                <Label>
+                  Delivery <span style={{ color: "red" }}>(*Required)</span>
+                </Label>
                 <Input
                   maxLength={10}
                   value={newProduct.delivery}
                   placeholder="Enter the Delivery Days"
                   onChange={(e) =>
                     setNewProduct({ ...newProduct, delivery: e.target.value })
-                  }
-                />
-                <Label>Image URL</Label>
-                <Input
-                  maxLength={250}
-                  value={newProduct.imageUrl}
-                  onChange={(e) =>
-                    setNewProduct({ ...newProduct, imageUrl: e.target.value })
-                  }
-                />
-                <Label>AR URL/LINK</Label>
-                <Input
-                  maxLength={250}
-                  value={newProduct.arUrl}
-                  onChange={(e) =>
-                    setNewProduct({ ...newProduct, arUrl: e.target.value })
                   }
                 />
                 <Label>Description</Label>
@@ -507,7 +568,6 @@ const Products = () => {
                   }}
                 />
               </div>
-
               <div
                 style={{
                   background: "#fff",
@@ -518,10 +578,11 @@ const Products = () => {
                   width: "600px",
                 }}
               >
-                <Label style={{ color: "#a166ff" }}>Stock & Category</Label>
-
                 <div style={{ marginBottom: "1rem" }}>
-                  <Label style={{ color: "#000" }}>Main Category</Label>
+                  <Label>
+                    Main Category{" "}
+                    <span style={{ color: "red" }}>(*Required)</span>
+                  </Label>
                   {["Top", "Bottom"].map((main) => (
                     <label
                       key={main}
@@ -542,7 +603,10 @@ const Products = () => {
 
                   {newProductCategory.main && (
                     <div style={{ marginTop: "0.5rem" }}>
-                      <Label style={{ color: "#000" }}>Sub Category</Label>
+                      <Label>
+                        Sub Category{" "}
+                        <span style={{ color: "red" }}>(*Required)</span>
+                      </Label>
                       {subCategoryMap[newProductCategory.main].map((sub) => (
                         <label
                           key={sub}
@@ -566,6 +630,7 @@ const Products = () => {
                     </div>
                   )}
                 </div>
+                <Label style={{ color: "#a166ff" }}>Stocks</Label>
 
                 <div>
                   <Label style={{ color: "#000" }}>Stock</Label>
@@ -694,7 +759,21 @@ const Products = () => {
 
                 <div style={{ marginTop: "1rem" }}>
                   <SaveButton onClick={handleAddProduct}>Save</SaveButton>
-                  <CancelButton onClick={() => setAddProduct(false)}>
+                  <CancelButton
+                    onClick={() => {
+                      setAddProduct(false);
+                      setNewProduct({
+                        name: "",
+                        price: "",
+                        delivery: "",
+                        imageUrl: "",
+                        arUrl: "",
+                        description: "",
+                        stock: { S: 0, M: 0, L: 0, XL: 0 },
+                      });
+                      setNewProductCategory({ main: "", sub: "" });
+                    }}
+                  >
                     Cancel
                   </CancelButton>
                 </div>
@@ -765,24 +844,6 @@ const Products = () => {
                   }
                 />
 
-                <Label>Image URL</Label>
-                <Input
-                  maxLength={250}
-                  value={editProduct.imageUrl}
-                  onChange={(e) =>
-                    setEditProduct({ ...editProduct, imageUrl: e.target.value })
-                  }
-                />
-
-                <Label>AR URL/LINK</Label>
-                <Input
-                  maxLength={250}
-                  value={editProduct.arUrl}
-                  onChange={(e) =>
-                    setEditProduct({ ...editProduct, arUrl: e.target.value })
-                  }
-                />
-
                 <Label>Description</Label>
                 <textarea
                   maxLength={250}
@@ -804,20 +865,6 @@ const Products = () => {
                     marginBottom: "1rem",
                   }}
                 />
-              </div>
-
-              <div
-                style={{
-                  background: "#fff",
-                  padding: "1rem",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                  color: "#000",
-                  width: "610px",
-                }}
-              >
-                <Label style={{ color: "#a166ff" }}>Stock & Category</Label>
-
                 <div style={{ marginBottom: "1rem" }}>
                   <Label style={{ color: "#000" }}>Main Category</Label>
                   {["Top", "Bottom"].map((main) => (
@@ -868,6 +915,19 @@ const Products = () => {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div
+                style={{
+                  background: "#fff",
+                  padding: "1rem",
+                  borderRadius: "12px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  color: "#000",
+                  width: "610px",
+                }}
+              >
+                <Label style={{ color: "#a166ff" }}>Stocks</Label>
 
                 <div>
                   <Label style={{ color: "#000" }}>Stock</Label>
@@ -1032,6 +1092,121 @@ const Products = () => {
                   No
                 </CancelButton>
               </div>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+        {showArModal && (
+          <ModalOverlay data-overlay="ar-overlay" onClick={closeArModal}>
+            <ModalContent
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "800px",
+                padding: "1rem",
+                maxHeight: "70vh",
+                overflowY: "auto",
+                textAlign: "center",
+                backgroundColor: "#f5f5f5",
+                borderRadius: "12px",
+              }}
+            >
+              <h3 style={{ marginBottom: "1rem", color: "#8a4fff" }}>
+                Select AR Product
+              </h3>
+              {arProducts.length === 0 && (
+                <p style={{ color: "#333" }}>No available AR products.</p>
+              )}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "1rem",
+                  marginTop: "1rem",
+                }}
+              >
+                {arProducts.map((ar) => (
+                  <div
+                    key={ar.id}
+                    style={{
+                      border: "1px solid #8a4fff",
+                      borderRadius: "8px",
+                      padding: "0.5rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      backgroundColor: "#fff",
+                      textAlign: "center",
+                      transition: "transform 0.2s",
+                      position: "relative", // needed for check icon
+                    }}
+                    onClick={() => selectArProduct(ar)}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.transform = "scale(1.03)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.transform = "scale(1)")
+                    }
+                  >
+                    {/* Green check if selected */}
+                    {newProduct.arUrl === ar.arUrl && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "8px",
+                          left: "8px",
+                          backgroundColor: "#4caf50",
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          fontSize: "14px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        ✓
+                      </div>
+                    )}
+
+                    <img
+                      src={ar.imageUrl}
+                      alt="AR Preview"
+                      style={{
+                        width: "100%",
+                        maxHeight: "150px",
+                        objectFit: "contain",
+                        borderRadius: "4px",
+                      }}
+                    />
+                    <p
+                      style={{
+                        fontSize: "12px",
+                        marginTop: "0.5rem",
+                        wordBreak: "break-word",
+                        color: "#333",
+                      }}
+                    >
+                      {ar.arUrl}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <CancelButton
+                onClick={() => setShowArModal(false)}
+                style={{
+                  marginTop: "1rem",
+                  backgroundColor: "#8a4fff",
+                  color: "#fff",
+                  borderRadius: "8px",
+                  padding: "0.5rem 1rem",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </CancelButton>
             </ModalContent>
           </ModalOverlay>
         )}

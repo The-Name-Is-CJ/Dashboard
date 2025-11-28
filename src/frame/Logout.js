@@ -2,8 +2,7 @@ import { signOut } from "firebase/auth";
 import {
   addDoc,
   collection,
-  doc,
-  getDoc,
+  getDocs,
   serverTimestamp,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -21,38 +20,26 @@ import { auth, db } from "../firebase";
 const Logout = () => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(true);
-  const [adminEmails, setAdminEmails] = useState([]);
+  const [sellerEmail, setSellerEmail] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchAdmins = async () => {
+    const fetchSeller = async () => {
       try {
-        const adminIds = ["A01", "A02", "A03", "A04"];
-        const admins = [];
-
-        for (const id of adminIds) {
-          const docRef = doc(db, "admins", id);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.email) {
-              admins.push({
-                name: data.name || "",
-                email: data.email,
-                role: data.role || "Admin",
-              });
-            }
-          }
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerData = querySnapshot.docs[0].data();
+          setSellerEmail({
+            email: sellerData.email,
+            role: sellerData.role || "Seller",
+          });
         }
-
-        setAdminEmails(admins);
       } catch (err) {
-        console.error("Error fetching admins:", err);
+        console.error("Error fetching seller:", err);
       }
     };
 
-    fetchAdmins();
+    fetchSeller();
   }, []);
 
   const handleConfirmLogout = async () => {
@@ -62,14 +49,17 @@ const Logout = () => {
       const user = auth.currentUser;
 
       if (user) {
-        const matchedAdmin = adminEmails.find((a) => a.email === user.email);
-        const role = matchedAdmin ? matchedAdmin.role : "Unknown Role";
+        const role =
+          sellerEmail?.email?.trim().toLowerCase() ===
+          user.email.trim().toLowerCase()
+            ? sellerEmail.role
+            : "Seller";
 
         const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
         await addDoc(collection(db, "recentActivityLogs"), {
           logID: logID,
-          action: "logged out",
+          action: "Seller logged out",
           role: role,
           userEmail: user.email,
           timestamp: serverTimestamp(),
@@ -77,6 +67,7 @@ const Logout = () => {
       }
 
       await signOut(auth);
+      auth.currentUser?.reload();
       navigate("/");
     } catch (error) {
       console.error("Logout failed:", error);

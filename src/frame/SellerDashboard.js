@@ -431,7 +431,7 @@ const Dashboard = () => {
 
   return (
     <Container>
-      <Header>Welcome back, Admin!</Header>
+      <Header>Welcome back, Seller!</Header>
 
       <CardContainer>
         <StatCard>
@@ -523,7 +523,7 @@ const Dashboard = () => {
 
       <LogsContainer>
         <LogsHeader>
-          <LogsTitle>Admin activity Logs</LogsTitle>
+          <LogsTitle>Seller activity Logs</LogsTitle>
 
           <div
             style={{

@@ -1,10 +1,9 @@
 import { signInWithEmailAndPassword } from "firebase/auth";
 import {
-  addDoc,
   collection,
-  doc,
-  getDoc,
+  getDocs,
   serverTimestamp,
+  addDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -16,38 +15,23 @@ const DashLogin = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [adminEmails, setAdminEmails] = useState([]);
+  const [allowedEmail, setAllowedEmail] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchAdmins = async () => {
+    const fetchSellerEmail = async () => {
       try {
-        const adminIds = ["A01", "A02", "A03", "A04"];
-        const admins = [];
-
-        for (const id of adminIds) {
-          const docRef = doc(db, "admins", id);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.email) {
-              admins.push({
-                name: data.name || "",
-                email: data.email,
-                role: data.role || "Admin",
-              });
-            }
-          }
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          setAllowedEmail(sellerDoc.email.toLowerCase());
         }
-
-        setAdminEmails(admins);
       } catch (err) {
-        console.error("Error fetching admins:", err);
+        console.error("Error fetching seller email:", err);
       }
     };
 
-    fetchAdmins();
+    fetchSellerEmail();
   }, []);
 
   const handleLogin = async (e) => {
@@ -62,11 +46,9 @@ const DashLogin = () => {
       );
       const user = userCredential.user;
 
-      const matchedAdmin = adminEmails.find(
-        (a) => a.email === user.email.toLowerCase()
-      );
-
-      if (!matchedAdmin) {
+      if (
+        user.email.trim().toLowerCase() !== allowedEmail.trim().toLowerCase()
+      ) {
         setErrorMsg("Unauthorized user.");
         return;
       }
@@ -74,13 +56,12 @@ const DashLogin = () => {
       const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       await addDoc(collection(db, "recentActivityLogs"), {
         logID,
-        action: "logged in",
+        action: "Seller logged in",
         userEmail: user.email,
-        role: matchedAdmin.role,
         timestamp: serverTimestamp(),
       });
 
-      navigate("/dashboard");
+      navigate("/seller/sellerdashboard");
     } catch (error) {
       console.error("Login error:", error);
       if (
@@ -99,9 +80,7 @@ const DashLogin = () => {
   return (
     <div className="login-page">
       <div className="curve-bg"></div>
-
-      <h1 className="welcome-text">Welcome to Admin Dashboard!</h1>
-
+      <h1 className="welcome-text">Welcome Seller!</h1>
       <div className="login-card">
         {errorMsg && <p className="error-msg">{errorMsg}</p>}
 

@@ -38,15 +38,16 @@ const searchStyles = {
   },
 };
 
-const Cancelled = () => {
+const ReturnRefund = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [weeklyCancelledCount, setWeeklyCancelledCount] = useState(0);
+  const [weeklyReturnCount, setWeeklyReturnCount] = useState(0);
 
+  // Fetch return/refund orders
   useEffect(() => {
-    const cancelledRef = collection(db, "cancelled");
-    const q = query(cancelledRef, orderBy("cancelledAt", "desc"));
+    const returnRef = collection(db, "return_refund");
+    const q = query(returnRef, orderBy("requestedAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       try {
@@ -54,18 +55,18 @@ const Cancelled = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
-
         setOrders(fetchedOrders);
       } catch (err) {
-        console.error("Error fetching cancelled orders:", err);
+        console.error("Error fetching return/refund orders:", err);
       }
     });
 
     return () => unsubscribe();
   }, []);
 
+  // Weekly return/refund count
   useEffect(() => {
-    const cancelledRef = collection(db, "cancelled");
+    const collectionsToWatch = ["return_refund"];
     const unsubscribes = [];
 
     const today = new Date();
@@ -74,35 +75,37 @@ const Cancelled = () => {
     startOfWeek.setHours(0, 0, 0, 0);
     startOfWeek.setDate(today.getDate() - dayOfWeek);
 
-    const updateWeeklyCancelledCount = () => {
+    const updateWeeklyReturnCount = () => {
       let total = 0;
 
       unsubscribes.forEach((u) => {
         if (!u.latestSnapshot) return;
         u.latestSnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.cancelledAt) {
-            const cancelledDate = data.cancelledAt.toDate();
-            if (cancelledDate >= startOfWeek && cancelledDate <= today)
-              total += 1;
+          if (data.requestedAt) {
+            const date = data.requestedAt.toDate();
+            if (date >= startOfWeek && date <= today) total += 1;
           }
         });
       });
 
-      setWeeklyCancelledCount(total);
+      setWeeklyReturnCount(total);
     };
 
-    const q = query(cancelledRef);
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      unsubscribe.latestSnapshot = snapshot;
-      updateWeeklyCancelledCount();
+    collectionsToWatch.forEach((col) => {
+      const q = query(collection(db, col));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        unsubscribe.latestSnapshot = snapshot;
+        updateWeeklyReturnCount();
+      });
+      unsubscribe.latestSnapshot = null;
+      unsubscribes.push(unsubscribe);
     });
-    unsubscribe.latestSnapshot = null;
-    unsubscribes.push(unsubscribe);
 
     return () => unsubscribes.forEach((u) => u());
   }, []);
 
+  // Filter orders by search term
   const filteredOrders = orders
     .map((order) => ({
       ...order,
@@ -120,6 +123,7 @@ const Cancelled = () => {
     { name: "Completed", path: "/seller/orders/complete" },
     { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
+
   return (
     <OrdersContainer>
       <OrdersHeader
@@ -129,7 +133,7 @@ const Cancelled = () => {
           alignItems: "center",
         }}
       >
-        <h2 style={{ margin: 0 }}>Cancelled Orders</h2>
+        <h2 style={{ margin: 0 }}>Return / Refund Orders</h2>
 
         <div style={searchStyles.container}>
           <span style={{ fontSize: "18px", color: "#666" }}>
@@ -147,6 +151,7 @@ const Cancelled = () => {
           <FiSearch style={searchStyles.icon} />
         </div>
       </OrdersHeader>
+
       <OrdersTabs
         style={{
           display: "flex",
@@ -166,12 +171,20 @@ const Cancelled = () => {
             </TabItem>
           ))}
         </div>
-        <div style={{ fontSize: "25px", fontWeight: "500", color: "#444" }}>
-          Total cancelled orders this week:{" "}
-          <span style={{ fontWeight: "500", color: "#ff6600" }}>
-            {weeklyCancelledCount}
+
+        <div
+          style={{
+            marginTop: "10px",
+            fontSize: "25px",
+            fontWeight: "500",
+            color: "#444",
+          }}
+        >
+          Total requested this week:{" "}
+          <span style={{ fontWeight: "500", color: "#dc3545" }}>
+            {weeklyReturnCount}
           </span>
-        </div>{" "}
+        </div>
       </OrdersTabs>
 
       <OrdersTable>
@@ -184,7 +197,7 @@ const Cancelled = () => {
               Address
             </TableHeader>
             <TableHeader width="125px" style={{ textAlign: "center" }}>
-              Cancelled Date
+              Requested Date
             </TableHeader>
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
@@ -208,10 +221,10 @@ const Cancelled = () => {
             filteredOrders.flatMap((order) =>
               order.items.map((item) => (
                 <TableRow key={`${order.id}-${item.id}`}>
-                  <TableData>{order.name}</TableData>
+                  <TableData>{order.name || order.userId}</TableData>
                   <TableData>{order.address || "-"}</TableData>
                   <TableData style={{ textAlign: "center" }}>
-                    {order.cancelledAt?.toDate().toLocaleString() || "-"}
+                    {order.requestedAt?.toDate().toLocaleString() || "-"}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
@@ -228,7 +241,7 @@ const Cancelled = () => {
                   <TableData style={{ textAlign: "center" }}>
                     <button
                       style={{
-                        backgroundColor: "#ff6600",
+                        backgroundColor: "#dc3545",
                         color: "#fff",
                         padding: "4px 10px",
                         borderRadius: "6px",
@@ -240,7 +253,7 @@ const Cancelled = () => {
                       }}
                       disabled
                     >
-                      Cancelled
+                      Return/Refund
                     </button>
                   </TableData>
                 </TableRow>
@@ -252,7 +265,7 @@ const Cancelled = () => {
                 colSpan="8"
                 style={{ textAlign: "center", padding: "20px" }}
               >
-                ❌ No cancelled orders found
+                ✅ No return/refund requests found
               </TableData>
             </TableRow>
           )}
@@ -262,4 +275,4 @@ const Cancelled = () => {
   );
 };
 
-export default Cancelled;
+export default ReturnRefund;

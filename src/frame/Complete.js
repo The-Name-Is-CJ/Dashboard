@@ -119,13 +119,13 @@ const Complete = () => {
     .filter((order) => order.items.length > 0);
 
   const tabs = [
-    { name: "Orders", path: "/orders" },
-    { name: "To Ship", path: "/orders/toship" },
-    { name: "To Receive", path: "/orders/toreceive" },
-    { name: "Cancelled", path: "/orders/cancelled" },
-    { name: "Completed", path: "/orders/complete" },
+    { name: "Orders", path: "/seller/orders" },
+    { name: "To Ship", path: "/seller/orders/toship" },
+    { name: "To Receive", path: "/seller/orders/toreceive" },
+    { name: "Cancelled", path: "/seller/orders/cancelled" },
+    { name: "Completed", path: "/seller/orders/complete" },
+    { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
-
   return (
     <OrdersContainer>
       <OrdersHeader
