@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import "./App.css";
 import Sidebar from "./components/Sidebar";
+import AdminSidebar from "./components/AdminSidebar";
 import ChatSupport from "./frame/ChatSupport";
 import Logout from "./frame/Logout";
 import Products from "./frame/Products";
@@ -16,7 +17,6 @@ import Reviews from "./frame/Reviews";
 import SellerLogin from "./frame/SellerLogin";
 import SellerDashboard from "./frame/SellerDashboard";
 import SplashScreen from "./frame/SplashScreen";
-
 import Cancelled from "./frame/Cancelled";
 import Complete from "./frame/Complete";
 import Orders from "./frame/Orders";
@@ -24,13 +24,29 @@ import RoleSelection from "./frame/RoleSelection";
 import ToReceive from "./frame/ToReceive";
 import Return_Refund from "./frame/Return_Refund";
 import ToShip from "./frame/ToShip";
+import ActivityLogs from "./Adminframe/ActivityLogs";
+import Admin from "./Adminframe/Admin";
+import AdminDashboard from "./Adminframe/AdminDashboard";
+import AdminLogin from "./Adminframe/AdminLogin";
+import AdminLogout from "./Adminframe/AdminLogout";
+import Archives from "./Adminframe/Archives";
+import Seller from "./Adminframe/Seller";
+import Users from "./Adminframe/Users";
 
-// Layout component for Seller routes
 const SellerLayout = () => (
   <div style={{ display: "flex" }}>
     <Sidebar /> {/* side nav */}
     <div style={{ marginLeft: "250px", padding: "20px", flex: 1 }}>
-      <Outlet /> {/* nested routes render here */}
+      <Outlet />
+    </div>
+  </div>
+);
+
+const AdminLayout = () => (
+  <div style={{ display: "flex" }}>
+    <AdminSidebar /> {/* side nav */}
+    <div style={{ marginLeft: "250px", flex: 1 }}>
+      <Outlet />
     </div>
   </div>
 );
@@ -50,6 +66,7 @@ function App() {
       <Routes>
         <Route path="/" element={<RoleSelection />} />
         <Route path="/sellerLogin" element={<SellerLogin />} />
+        <Route path="/adminLogin" element={<AdminLogin />} />
         <Route path="/seller" element={<SellerLayout />}>
           <Route index element={<Navigate to="sellerdashboard" replace />} />
           <Route path="sellerdashboard" element={<SellerDashboard />} />
@@ -63,6 +80,16 @@ function App() {
           <Route path="chat" element={<ChatSupport />} />
           <Route path="reviews" element={<Reviews />} />
           <Route path="logout" element={<Logout />} />
+        </Route>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="admindashboard" replace />} />
+          <Route path="admindashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<Users />} />
+          <Route path="seller" element={<Seller />} />
+          <Route path="admins" element={<Admin />} />
+          <Route path="activity-logs" element={<ActivityLogs />} />
+          <Route path="archives" element={<Archives />} />
+          <Route path="adminlogout" element={<AdminLogout />} />
         </Route>
 
         {/* Catch-all */}

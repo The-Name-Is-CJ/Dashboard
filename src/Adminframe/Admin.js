@@ -2,12 +2,22 @@ import {
   createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
 } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  addDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+
 import { useEffect, useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { auth, db } from "../firebase";
 
-const Profile = () => {
+const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentDocId, setCurrentDocId] = useState("");
@@ -28,14 +38,12 @@ const Profile = () => {
     A01: "MAIN ADMIN",
     A02: "ADMIN 1",
     A03: "ADMIN 2",
-    A04: "ADMIN 3",
   };
 
   const [admins, setAdmins] = useState({
     A01: { name: "", email: "" },
     A02: { name: "", email: "" },
     A03: { name: "", email: "" },
-    A04: { name: "", email: "" },
   });
 
   useEffect(() => {
@@ -92,17 +100,36 @@ const Profile = () => {
 
   const handleAddAdmin = async (docId, name, email, password) => {
     try {
+      // 🔍 Prevent duplicate email
       const signInMethods = await fetchSignInMethodsForEmail(auth, email);
       if (signInMethods.length > 0) {
         alert("This email already exists. Use a different one.");
         return;
       }
+
+      // 👤 Create Firebase Auth user
       await createUserWithEmailAndPassword(auth, email, password);
 
+      // 📝 Save admin in Firestore
       const docRef = doc(db, "admins", docId);
       await updateDoc(docRef, { name, email });
 
+      // ⭐ NEW: Add activity log
+      const logID =
+        "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+
+      const currentAdminEmail = auth.currentUser?.email || "Unknown Admin";
+
+      await addDoc(collection(db, "recentActivityLogs"), {
+        logID,
+        action: `Admin "${currentAdminEmail}" added "${email}" as new admin`,
+        userEmail: currentAdminEmail,
+        timestamp: new Date().toISOString(),
+      });
+
+      // 🟣 Update UI
       setAdmins((prev) => ({ ...prev, [docId]: { name, email } }));
+
       alert(`✅ Admin added successfully: ${email}`);
       handleCloseModal();
     } catch (error) {
@@ -112,29 +139,99 @@ const Profile = () => {
   };
 
   const handleSubmit = async () => {
-    const { name, email, password, confirmPassword } = formData;
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const password = formData.password;
+    const confirmPassword = formData.confirmPassword;
+
     if (!name || !email || !password || !confirmPassword) {
       alert("Please fill out all fields.");
       return;
     }
+
+    // email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       alert("Passwords do not match.");
       return;
     }
+
     await handleAddAdmin(currentDocId, name, email, password);
   };
 
   const handleRemoveAdmin = async (docId) => {
-    const confirm = window.confirm(`Remove ${admins[docId].name}?`);
-    if (!confirm) return;
+    const confirmDelete = window.confirm(
+      `Remove ${admins[docId].name}? The data will be archived.`
+    );
+    if (!confirmDelete) return;
 
     try {
+      const removedAdmin = admins[docId];
+      const adminEmail = removedAdmin.email;
+
+      // === 1. Generate unique remove ID ===
+      const generateRemoveId = () => {
+        const randomHex = Math.floor(Math.random() * 0xffffff)
+          .toString(16)
+          .padStart(6, "0")
+          .toUpperCase();
+        return `R-${randomHex}`;
+      };
+      const removeId = generateRemoveId();
+
+      // === 2. Fetch all recentActivityLogs for this admin ===
+      const logsQuery = query(
+        collection(db, "recentActivityLogs"),
+        where("userEmail", "==", adminEmail)
+      );
+
+      const logsSnapshot = await getDocs(logsQuery);
+      const adminLogs = logsSnapshot.docs.map((doc) => doc.data());
+
+      // === 3. Save archive into adminArchive ===
+      await addDoc(collection(db, "adminArchive"), {
+        removeId,
+        name: removedAdmin.name,
+        email: removedAdmin.email,
+        removedFrom: docId,
+        removedAt: new Date().toISOString(),
+        recentActivityLogs: adminLogs, // ⬅️ ALL LOGS SAVED HERE
+      });
+
+      // === 4. Clear admin slot ===
       const docRef = doc(db, "admins", docId);
       await updateDoc(docRef, { name: "", email: "" });
-      setAdmins((prev) => ({ ...prev, [docId]: { name: "", email: "" } }));
-      alert("Admin removed successfully.");
+
+      // === 5. Update UI ===
+      setAdmins((prev) => ({
+        ...prev,
+        [docId]: { name: "", email: "" },
+      }));
+
+      // ⭐⭐⭐ NEW — Create recent activity log
+      const currentAdminId = Object.keys(admins).find(
+        (key) => admins[key].email === auth.currentUser?.email
+      );
+
+      await addDoc(collection(db, "recentActivityLogs"), {
+        logID: "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+        action: `Admin (${
+          admins[currentAdminId]?.email || "Unknown"
+        }) removed admin ${removedAdmin.email}`,
+        timestamp: new Date().toISOString(),
+        userEmail: admins[currentAdminId]?.email || "Unknown",
+      });
+
+      alert(
+        `Admin removed and archived.\nRemove ID: ${removeId}\nLogs Saved: ${adminLogs.length}`
+      );
     } catch (err) {
-      console.error(err);
+      console.error("Error removing admin:", err);
       alert("Failed to remove admin.");
     }
   };
@@ -154,6 +251,10 @@ const Profile = () => {
               <p>
                 <strong>Name:</strong> {name || "— No Admin —"}
               </p>
+              <p>
+                <strong>Email:</strong> {admins[docId].email || "— No Email —"}
+              </p>
+
               {!name && (
                 <button
                   style={{ ...buttonStyle, backgroundColor: "#7C4DFF" }}
@@ -329,24 +430,6 @@ const Profile = () => {
           </div>
         </div>
       )}
-
-      <p
-        style={{
-          marginTop: "1.5rem",
-          fontSize: "0.9rem",
-          color: "#333",
-          backgroundColor: "#f9f9f9",
-          padding: "0.8rem",
-          borderRadius: "8px",
-          textAlign: "center",
-        }}
-      >
-        {" "}
-        💡 <strong>Note:</strong> Removing another admin here will only delete
-        their admin record from the dashboard. <br /> To permanently delete an
-        admin account from the system (Firebase Authentication), that admin must
-        log in with their account and remove it themselves.{" "}
-      </p>
     </div>
   );
 };
@@ -454,4 +537,4 @@ const removeBtn = {
   cursor: "pointer",
 };
 
-export default Profile;
+export default Admin;

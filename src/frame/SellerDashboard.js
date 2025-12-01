@@ -314,11 +314,10 @@ const Dashboard = () => {
         orderBy("timestamp", "desc")
       );
       const snapshot = await getDocs(q);
-      const logsData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        expanded: false,
-      }));
+      const logsData = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data(), expanded: false }))
+        .filter((log) => log.role === "Seller"); // filter logs with role "Seller"
+
       setLogs(logsData);
     };
 
@@ -379,24 +378,74 @@ const Dashboard = () => {
       : filteredLogs;
 
   const handleDeleteLog = (id) => {
-    setModalMessage("Delete this log permanently?");
+    setModalMessage("Move this log to deleted logs?");
     setConfirmAction(() => async () => {
-      await deleteDoc(doc(db, "recentActivityLogs", id));
-      setLogs((prev) => prev.filter((log) => log.id !== id));
-      setModalVisible(false);
+      try {
+        // Get the log data
+        const logRef = doc(db, "recentActivityLogs", id);
+        const logSnap = await getDoc(logRef);
+        if (!logSnap.exists()) throw new Error("Log not found");
+        const logData = logSnap.data();
+
+        // Add to deletedLogs doc (single doc called 'allDeletedLogs')
+        const deletedDocRef = doc(db, "deletedLogs", "allDeletedLogs");
+        const deletedSnap = await getDoc(deletedDocRef);
+
+        if (deletedSnap.exists()) {
+          await updateDoc(deletedDocRef, {
+            logs: arrayUnion({ id, ...logData }),
+          });
+        } else {
+          await setDoc(deletedDocRef, { logs: [{ id, ...logData }] });
+        }
+
+        // Remove from recentActivityLogs
+        await deleteDoc(logRef);
+
+        setLogs((prev) => prev.filter((log) => log.id !== id));
+        setModalVisible(false);
+      } catch (err) {
+        console.error("Error moving log:", err);
+        setModalVisible(false);
+      }
     });
     setModalVisible(true);
   };
 
   const handleDeleteAllLogs = () => {
-    setModalMessage("Delete ALL logs permanently?");
+    setModalMessage("Move ALL logs to deleted logs?");
     setConfirmAction(() => async () => {
-      const snap = await getDocs(collection(db, "recentActivityLogs"));
-      await Promise.all(
-        snap.docs.map((d) => deleteDoc(doc(db, "recentActivityLogs", d.id)))
-      );
-      setLogs([]);
-      setModalVisible(false);
+      try {
+        const snap = await getDocs(collection(db, "recentActivityLogs"));
+        const allLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        if (allLogs.length === 0) {
+          setModalVisible(false);
+          return;
+        }
+
+        const deletedDocRef = doc(db, "deletedLogs", "allDeletedLogs");
+        const deletedSnap = await getDoc(deletedDocRef);
+
+        if (deletedSnap.exists()) {
+          await updateDoc(deletedDocRef, {
+            logs: arrayUnion(...allLogs),
+          });
+        } else {
+          await setDoc(deletedDocRef, { logs: allLogs });
+        }
+
+        // Delete all from recentActivityLogs
+        await Promise.all(
+          snap.docs.map((d) => deleteDoc(doc(db, "recentActivityLogs", d.id)))
+        );
+
+        setLogs([]);
+        setModalVisible(false);
+      } catch (err) {
+        console.error("Error moving all logs:", err);
+        setModalVisible(false);
+      }
     });
     setModalVisible(true);
   };
@@ -415,16 +464,46 @@ const Dashboard = () => {
 
   const handleDeleteSelectedLogs = () => {
     if (selectedLogs.length === 0) return;
+
     setModalMessage(
-      `Delete ${selectedLogs.length} selected log(s) permanently?`
+      `Move ${selectedLogs.length} selected log(s) to deleted logs?`
     );
     setConfirmAction(() => async () => {
-      await Promise.all(
-        selectedLogs.map((id) => deleteDoc(doc(db, "recentActivityLogs", id)))
-      );
-      setLogs((prev) => prev.filter((log) => !selectedLogs.includes(log.id)));
-      setSelectedLogs([]);
-      setModalVisible(false);
+      try {
+        const deletedDocRef = doc(db, "deletedLogs", "allDeletedLogs");
+        const deletedSnap = await getDoc(deletedDocRef);
+
+        // Fetch all selected logs
+        const logsToMove = await Promise.all(
+          selectedLogs.map(async (id) => {
+            const snap = await getDoc(doc(db, "recentActivityLogs", id));
+            return snap.exists() ? { id, ...snap.data() } : null;
+          })
+        );
+
+        const validLogs = logsToMove.filter(Boolean);
+
+        // Add to deletedLogs
+        if (deletedSnap.exists()) {
+          await updateDoc(deletedDocRef, {
+            logs: arrayUnion(...validLogs),
+          });
+        } else {
+          await setDoc(deletedDocRef, { logs: validLogs });
+        }
+
+        // Delete from recentActivityLogs
+        await Promise.all(
+          selectedLogs.map((id) => deleteDoc(doc(db, "recentActivityLogs", id)))
+        );
+
+        setLogs((prev) => prev.filter((log) => !selectedLogs.includes(log.id)));
+        setSelectedLogs([]);
+        setModalVisible(false);
+      } catch (err) {
+        console.error("Error moving selected logs:", err);
+        setModalVisible(false);
+      }
     });
     setModalVisible(true);
   };

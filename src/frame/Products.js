@@ -7,6 +7,9 @@ import {
   serverTimestamp,
   updateDoc,
   onSnapshot,
+  getDoc,
+  query,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
@@ -26,7 +29,7 @@ const SIZE_OPTIONS = ["S", "M", "L", "XL"];
 const Products = () => {
   const [products, setProducts] = useState([]);
   const user = auth.currentUser;
-  const [role, setRole] = useState(localStorage.getItem("role") || "Unknown");
+  const [role, setRole] = useState(localStorage.getItem("role") || "Seller");
 
   const generateLogID = () => {
     const timestamp = Date.now();
@@ -54,6 +57,8 @@ const Products = () => {
   const [productToDelete, setProductToDelete] = useState(null);
   const [arProducts, setArProducts] = useState([]);
   const [showArModal, setShowArModal] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingProductName, setPendingProductName] = useState("");
 
   const subCategoryMap = {
     Top: ["T-Shirt", "Longsleeves"],
@@ -180,7 +185,7 @@ const Products = () => {
         0
       );
 
-      await addDoc(collection(db, "products"), {
+      await addDoc(collection(db, "sellerRequest"), {
         productID: newProductID,
         productName: newProduct.name,
         price: Number(newProduct.price),
@@ -199,14 +204,24 @@ const Products = () => {
         editedAt: null,
       });
 
+      let currentRole = "Seller";
+      const querySnapshot = await getDocs(collection(db, "seller"));
+      if (!querySnapshot.empty) {
+        const sellerDoc = querySnapshot.docs[0].data();
+        if (sellerDoc.email === user?.email) currentRole = "Seller";
+      }
+
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email || "Unknown user",
-        role: role,
+        role: currentRole,
         action: "Add product",
         productName: newProduct.name,
         timestamp: serverTimestamp(),
       });
+
+      setPendingProductName(newProduct.name);
+      setShowPendingModal(true);
 
       fetchProducts();
       setAddProduct(false);
@@ -267,10 +282,23 @@ const Products = () => {
       if (originalData.categorySub !== editProduct.categorySub)
         changes.push("Sub Category");
 
+      // Fetch current role dynamically
+      let currentRole = "Seller";
+      try {
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          if (sellerDoc.email === user?.email) currentRole = "Seller";
+        }
+      } catch (err) {
+        console.error("Error fetching role for log:", err);
+      }
+
+      // Then log using currentRole
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email || "Unknown user",
-        role: role,
+        role: currentRole,
         action: `Edited product's ${changes.join(", ")}`,
         productId: editProduct.productID,
         productName: editProduct.productName,
@@ -288,26 +316,63 @@ const Products = () => {
 
   const confirmDelete = async () => {
     try {
-      await deleteDoc(doc(db, "products", deleteConfirm.id));
+      // 1. Get the full product data before removing
+      const productRef = doc(db, "products", deleteConfirm.id);
+      const productSnap = await getDoc(productRef);
+
+      if (!productSnap.exists()) {
+        alert("Product not found.");
+        return;
+      }
+
+      const productData = productSnap.data();
+
+      // 2. Move product to removedProducts collection (save EVERYTHING)
+      await addDoc(collection(db, "removedProducts"), {
+        ...productData,
+        originalId: deleteConfirm.id,
+        removedAt: serverTimestamp(),
+        removedBy: user?.email ?? "Unknown user",
+        role: role ?? "Unknown role",
+      });
+
+      // 3. Remove from products collection
+      await deleteDoc(productRef);
+
+      // 4. Update local state
       setProducts((prev) =>
         prev.filter((product) => product.id !== deleteConfirm.id)
       );
-      setDeleteConfirm({ show: false, id: null });
 
+      // Determine current role dynamically
+      let currentRole = "Unknown role";
+      try {
+        const querySnapshot = await getDocs(collection(db, "seller"));
+        if (!querySnapshot.empty) {
+          const sellerDoc = querySnapshot.docs[0].data();
+          if (sellerDoc.email === user?.email) currentRole = "Seller";
+        }
+      } catch (err) {
+        console.error("Error fetching role for log:", err);
+      }
+
+      // Log the activity
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email ?? "Unknown user",
-        role: role ?? "Unknown role",
-        action: "deleted product",
-        productId: deleteConfirm.productID,
-        productName: productToDelete?.productName ?? "Unknown product",
+        role: currentRole,
+        action: "removed product",
+        productId: deleteConfirm.id,
+        productName: productData.productName ?? "Unknown product",
         timestamp: serverTimestamp(),
       });
 
+      // 6. Reset states
+      setDeleteConfirm({ show: false, id: null });
       setProductToDelete(null);
     } catch (error) {
-      console.error("Error deleting product:", error);
-      alert("Failed to delete.");
+      console.error("Error moving product:", error);
+      alert("Failed to remove product.");
       setDeleteConfirm({ show: false, id: null });
       setProductToDelete(null);
     }
@@ -465,11 +530,11 @@ const Products = () => {
             <ModalContent
               onClick={(e) => e.stopPropagation()}
               style={{
-                maxWidth: "90vw",
-                width: "1200px",
-                maxHeight: "80vh",
+                maxWidth: "95vw",
+                width: "1400px", // wider
+                maxHeight: "90vh", // taller
                 overflowY: "auto",
-                padding: "1.5rem",
+                padding: "2rem",
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "2rem",
@@ -575,7 +640,7 @@ const Products = () => {
                   borderRadius: "12px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                   color: "#000",
-                  width: "600px",
+                  width: "800px",
                 }}
               >
                 <div style={{ marginBottom: "1rem" }}>
@@ -639,29 +704,30 @@ const Products = () => {
                     style={{
                       marginTop: "5px",
                       borderCollapse: "collapse",
-                      width: "100%",
+                      width: "100%", // full width
+                      tableLayout: "fixed", // uniform column widths
                       background: "#fff",
                       color: "#000",
                     }}
                   >
                     <thead>
                       <tr>
-                        <th>Size</th>
+                        <th style={{ width: "12%" }}>Size</th>
                         {newProductCategory.main === "Top" ? (
                           <>
-                            <th>Height (cm)</th>
-                            <th>Weight (kg)</th>
-                            <th>Shoulder (cm)</th>
-                            <th>Chest (cm)</th>
-                            <th>Stock</th>
+                            <th style={{ width: "12%" }}>Height (cm)</th>
+                            <th style={{ width: "12%" }}>Weight (kg)</th>
+                            <th style={{ width: "12%" }}>Shoulder (cm)</th>
+                            <th style={{ width: "12%" }}>Chest (cm)</th>
+                            <th style={{ width: "12%" }}>Stock</th>
                           </>
                         ) : newProductCategory.main === "Bottom" ? (
                           <>
-                            <th>Waist (cm)</th>
-                            <th>Hip (cm)</th>
-                            <th>Height (cm)</th>
-                            <th>Weight (kg)</th>
-                            <th>Stock</th>
+                            <th style={{ width: "12%" }}>Waist (cm)</th>
+                            <th style={{ width: "12%" }}>Hip (cm)</th>
+                            <th style={{ width: "12%" }}>Height (cm)</th>
+                            <th style={{ width: "12%" }}>Weight (kg)</th>
+                            <th style={{ width: "12%" }}>Stock</th>
                           </>
                         ) : null}
                       </tr>
@@ -730,10 +796,12 @@ const Products = () => {
 
                         return (
                           <tr key={size}>
-                            <td>{size}</td>
+                            <td style={{ textAlign: "center" }}>{size}</td>
                             {data
                               ? Object.values(data).map((val, i) => (
-                                  <td key={i}>{val}</td>
+                                  <td key={i} style={{ textAlign: "center" }}>
+                                    {val}
+                                  </td>
                                 ))
                               : null}
                             <td>
@@ -757,8 +825,15 @@ const Products = () => {
                   </table>
                 </div>
 
-                <div style={{ marginTop: "1rem" }}>
-                  <SaveButton onClick={handleAddProduct}>Save</SaveButton>
+                <div
+                  style={{
+                    marginTop: "2rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "4rem", // space between buttons
+                  }}
+                >
+                  <SaveButton onClick={handleAddProduct}>Request</SaveButton>
                   <CancelButton
                     onClick={() => {
                       setAddProduct(false);
@@ -787,11 +862,11 @@ const Products = () => {
             <ModalContent
               onClick={(e) => e.stopPropagation()}
               style={{
-                maxWidth: "90vw",
-                width: "1200px",
-                maxHeight: "80vh",
+                maxWidth: "95vw",
+                width: "1400px", // wider
+                maxHeight: "90vh", // taller
                 overflowY: "auto",
-                padding: "1.5rem",
+                padding: "2rem",
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "2rem",
@@ -924,7 +999,7 @@ const Products = () => {
                   borderRadius: "12px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                   color: "#000",
-                  width: "610px",
+                  width: "800px",
                 }}
               >
                 <Label style={{ color: "#a166ff" }}>Stocks</Label>
@@ -936,29 +1011,30 @@ const Products = () => {
                     style={{
                       marginTop: "5px",
                       borderCollapse: "collapse",
-                      width: "100%",
+                      width: "100%", // full width
+                      tableLayout: "fixed", // uniform column widths
                       background: "#fff",
                       color: "#000",
                     }}
                   >
                     <thead>
                       <tr>
-                        <th>Size</th>
+                        <th style={{ width: "12%" }}>Size</th>
                         {editProduct.categoryMain === "Top" ? (
                           <>
-                            <th>Height (cm)</th>
-                            <th>Weight (kg)</th>
-                            <th>Shoulder (cm)</th>
-                            <th>Chest (cm)</th>
-                            <th>Stock</th>
+                            <th style={{ width: "12%" }}>Height (cm)</th>
+                            <th style={{ width: "12%" }}>Weight (kg)</th>
+                            <th style={{ width: "12%" }}>Shoulder (cm)</th>
+                            <th style={{ width: "12%" }}>Chest (cm)</th>
+                            <th style={{ width: "12%" }}>Stock</th>
                           </>
                         ) : editProduct.categoryMain === "Bottom" ? (
                           <>
-                            <th>Waist (cm)</th>
-                            <th>Hip (cm)</th>
-                            <th>Height (cm)</th>
-                            <th>Weight (kg)</th>
-                            <th>Stock</th>
+                            <th style={{ width: "12%" }}>Waist (cm)</th>
+                            <th style={{ width: "12%" }}>Hip (cm)</th>
+                            <th style={{ width: "12%" }}>Height (cm)</th>
+                            <th style={{ width: "12%" }}>Weight (kg)</th>
+                            <th style={{ width: "12%" }}>Stock</th>
                           </>
                         ) : null}
                       </tr>
@@ -1027,10 +1103,12 @@ const Products = () => {
 
                         return (
                           <tr key={size}>
-                            <td>{size}</td>
+                            <td style={{ textAlign: "center" }}>{size}</td>
                             {data
                               ? Object.values(data).map((val, i) => (
-                                  <td key={i}>{val}</td>
+                                  <td key={i} style={{ textAlign: "center" }}>
+                                    {val}
+                                  </td>
                                 ))
                               : null}
                             <td>
@@ -1055,7 +1133,14 @@ const Products = () => {
                   </table>
                 </div>
 
-                <div style={{ marginTop: "1rem" }}>
+                <div
+                  style={{
+                    marginTop: "2rem",
+                    display: "flex",
+                    justifyContent: "center",
+                    gap: "4rem", // space between buttons
+                  }}
+                >
                   <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
                   <CancelButton onClick={() => setEditProduct(null)}>
                     Cancel
@@ -1077,7 +1162,7 @@ const Products = () => {
                 fontSize: "20px",
               }}
             >
-              <p>Are you sure you want to delete {productToDelete?.name}?</p>
+              <p>Are you sure you want to remove {productToDelete?.name}?</p>
               <div
                 style={{
                   display: "flex",
@@ -1207,6 +1292,38 @@ const Products = () => {
               >
                 Cancel
               </CancelButton>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+        {showPendingModal && (
+          <ModalOverlay
+            onClick={() => setShowPendingModal(false)}
+            data-overlay="true"
+          >
+            <ModalContent
+              style={{
+                maxWidth: "400px",
+                padding: "1.5rem",
+                textAlign: "center",
+                color: "#363636",
+                fontSize: "18px",
+                borderRadius: "12px",
+                backgroundColor: "#fff",
+              }}
+            >
+              <h3 style={{ marginBottom: "1rem", color: "#8a4fff" }}>
+                Product Pending Approval
+              </h3>
+              <p>
+                Your product <strong>{pendingProductName}</strong> has been
+                submitted and is waiting for admin approval.
+              </p>
+              <SaveButton
+                style={{ marginTop: "1.5rem" }}
+                onClick={() => setShowPendingModal(false)}
+              >
+                OK
+              </SaveButton>
             </ModalContent>
           </ModalOverlay>
         )}

@@ -1,8 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const RoleSelection = () => {
   const navigate = useNavigate();
+  const [showAdminPopup, setShowAdminPopup] = useState(false);
+  const [adminInput, setAdminInput] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleAdminSubmit = () => {
+    if (adminInput.trim().toUpperCase() === "ADMIN") {
+      navigate("/adminLogin");
+    } else {
+      setErrorMsg("Incorrect word. Type ADMIN to proceed.");
+    }
+  };
 
   return (
     <div className="role-page">
@@ -17,11 +28,53 @@ const RoleSelection = () => {
           <button className="role-btn" onClick={() => navigate("/sellerLogin")}>
             Seller
           </button>
-          <button className="role-btn" onClick={() => navigate("/admin-login")}>
+
+          <button className="role-btn" onClick={() => setShowAdminPopup(true)}>
             Admin
           </button>
         </div>
       </div>
+
+      {/* POPUP MODAL */}
+      {showAdminPopup && (
+        <div className="popup-overlay">
+          <div className="popup">
+            <h3>Admin Access Confirmation</h3>
+            <p>
+              Please type <strong>ADMIN</strong> to continue.
+            </p>
+
+            <input
+              type="text"
+              value={adminInput}
+              onChange={(e) => {
+                setAdminInput(e.target.value);
+                setErrorMsg("");
+              }}
+              placeholder="Type ADMIN here..."
+              className="popup-input"
+            />
+
+            {errorMsg && <p className="error">{errorMsg}</p>}
+
+            <div className="popup-buttons">
+              <button className="confirm-btn" onClick={handleAdminSubmit}>
+                Confirm
+              </button>
+              <button
+                className="cancel-btn"
+                onClick={() => {
+                  setShowAdminPopup(false);
+                  setAdminInput("");
+                  setErrorMsg("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .role-page {
@@ -105,6 +158,66 @@ const RoleSelection = () => {
         .role-btn:hover {
           background: linear-gradient(90deg, #5e35b1, #8660ff);
           transform: translateY(-2px);
+        }
+
+         .popup-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 20;
+        }
+
+        .popup {
+          background: white;
+          width: 350px;
+          padding: 25px;
+          border-radius: 15px;
+          text-align: center;
+          box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+
+        .popup-input {
+          width: 100%;
+          padding: 10px;
+          margin-top: 10px;
+          border-radius: 10px;
+          border: 1px solid #aaa;
+        }
+
+        .popup-buttons {
+          margin-top: 15px;
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .confirm-btn {
+          background: #6f42c1;
+          border: none;
+          color: white;
+          padding: 10px 20px;
+          border-radius: 10px;
+          cursor: pointer;
+        }
+
+        .cancel-btn {
+          background: #ccc;
+          border: none;
+          color: black;
+          padding: 10px 20px;
+          border-radius: 10px;
+          cursor: pointer;
+        }
+
+        .error {
+          color: red;
+          margin-top: 8px;
+          font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
