@@ -198,8 +198,8 @@ const Admin = () => {
         removeId,
         name: removedAdmin.name,
         email: removedAdmin.email,
-        removedFrom: docId,
-        removedAt: new Date().toISOString(),
+        archiveFrom: docId,
+        archivedAt: new Date().toISOString(),
         recentActivityLogs: adminLogs, // ⬅️ ALL LOGS SAVED HERE
       });
 

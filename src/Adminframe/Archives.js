@@ -1,13 +1,30 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  getDoc,
+  addDoc,
+  writeBatch,
+  query,
+  where,
+  serverTimestamp,
+} from "firebase/firestore";
 import { db } from "../firebase";
+import { FaUser } from "react-icons/fa";
+
+const PersonIcon = FaUser;
 
 const Colors = {
   secondary: "#fff",
   primary: "#6f42c1",
   accent: "#9b7bff",
   white: "#fff",
+  black: "#fff",
   gray: "#777",
 };
 
@@ -17,7 +34,7 @@ const PageContainer = styled.div`
   background: ${Colors.primary};
   min-height: 100vh;
   width: 100%;
-  color: ${Colors.white};
+  color: ${Colors.black};
   font-family: "Poppins", sans-serif;
 `;
 
@@ -59,38 +76,41 @@ const SectionTitle = styled.h2`
   color: ${Colors.white};
 `;
 
-// GRID
-const CardGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 25px;
-  margin-top: 15px;
-`;
-
-// CARDS
-const Card = styled.div`
-  background: ${Colors.secondary};
-  padding: 20px;
-  border-radius: 15px;
-  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.35);
-  transition: 0.2s ease;
-
-  &:hover {
-    background: ${Colors.accent};
-    transform: translateY(-5px);
-    box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.45);
-  }
-`;
-
-const CardField = styled.p`
-  font-size: 0.95rem;
-  color: ${Colors.gray};
-  margin-bottom: 3px;
-`;
-
 const FieldLabel = styled.span`
   font-weight: 600;
   color: black;
+`;
+
+const ListContainer = styled.div`
+  margin-top: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const ListItem = styled.div`
+  width: 100%;
+  background: ${Colors.secondary};
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: 0.2s;
+  color: black; /* ← FORCE TEXT VISIBLE */
+
+  &:hover {
+    background: ${Colors.accent};
+    transform: translateX(5px);
+    color: white; /* ← optional: white text on hover */
+  }
+`;
+
+const ItemInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 `;
 
 const tabList = [
@@ -118,42 +138,32 @@ const Archives = () => {
   const [refund, setRefund] = useState([]);
   const [completed, setCompleted] = useState([]);
   const [cancelled, setCancelled] = useState([]);
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restoreItem, setRestoreItem] = useState(null);
+  const [restoreType, setRestoreType] = useState("");
+  const [restoreUserModalOpen, setRestoreUserModalOpen] = useState(false);
+  const [restoreUserItem, setRestoreUserItem] = useState(null);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   useEffect(() => {
     const fetchArchives = async () => {
       try {
-        // --- Users + orders + other arrays ---
-        const snap = await getDocs(collection(db, "usersArchive"));
+        // Fetch each main archive collection like admin/seller
+        const fetchCollection = async (collectionName) => {
+          const snap = await getDocs(collection(db, collectionName));
+          return snap.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+        };
 
-        let usersArr = [];
-        let ordersArr = [];
-        let toShipArr = [];
-        let toReceiveArr = [];
-        let refundArr = [];
-        let completedArr = [];
-        let cancelledArr = [];
-
-        snap.forEach((doc) => {
-          const data = doc.data();
-
-          if (data.users && typeof data.users === "object") {
-            usersArr.push({
-              ...data.users,
-              archivedAt: data.archivedAt || null,
-            });
-          }
-
-          if (Array.isArray(data.orders)) ordersArr.push(...data.orders);
-          if (Array.isArray(data.toShip)) toShipArr.push(...data.toShip);
-          if (Array.isArray(data.toReceive))
-            toReceiveArr.push(...data.toReceive);
-          if (Array.isArray(data.return_refund))
-            refundArr.push(...data.return_refund);
-          if (Array.isArray(data.completed))
-            completedArr.push(...data.completed);
-          if (Array.isArray(data.cancelled))
-            cancelledArr.push(...data.cancelled);
-        });
+        const usersArr = await fetchCollection("usersArchive");
+        const ordersArr = await fetchCollection("ordersArchive");
+        const toShipArr = await fetchCollection("toshipArchive");
+        const toReceiveArr = await fetchCollection("toreceiveArchive");
+        const refundArr = await fetchCollection("return_refundArchive");
+        const completedArr = await fetchCollection("completedArchive");
+        const cancelledArr = await fetchCollection("cancelledArchive");
 
         setUserArchives(usersArr);
         setOrders(ordersArr);
@@ -194,6 +204,268 @@ const Archives = () => {
     fetchArchives();
   }, []);
 
+  const logAdminAction = async ({ actionDescription, userIdAffected }) => {
+    try {
+      const adminSnapshot = await getDocs(collection(db, "admins"));
+      const currentAdminDoc = adminSnapshot.docs[0];
+      if (!currentAdminDoc) return;
+
+      const adminData = currentAdminDoc.data();
+      const adminEmail = adminData.email || "unknown";
+      const adminRole = adminData.role || "Admin";
+
+      const logId =
+        "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+
+      const logEntry = {
+        logID: logId,
+        action: actionDescription,
+        userId: userIdAffected,
+        userEmail: adminEmail,
+        role: adminRole,
+        timestamp: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "recentActivityLogs"), logEntry);
+    } catch (err) {
+      console.error("Error logging admin action:", err);
+    }
+  };
+
+  const collectionMap = {
+    usersArchive: "users",
+    ordersArchive: "orders",
+    toshipArchive: "toShip",
+    toreceiveArchive: "toReceive",
+    return_refundArchive: "return_refund",
+    completedArchive: "completed",
+    cancelledArchive: "cancelled",
+    adminArchive: "admins",
+    sellerArchive: "seller",
+    removedProducts: "products",
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreItem) return;
+
+    try {
+      const archiveId = restoreItem.id;
+      const archiveCollection = restoreItem.archiveCollection; // already set when clicking Restore
+      const originalCollection = collectionMap[archiveCollection];
+
+      if (!originalCollection) {
+        console.error("Unknown archive collection:", archiveCollection);
+        return;
+      }
+
+      // Use the restoreItem itself as the document to restore, remove id and archiveCollection
+      const { id, archiveCollection: _, ...archivedData } = restoreItem;
+
+      if (!archivedData || Object.keys(archivedData).length === 0) {
+        console.error("Archived data missing.");
+        return;
+      }
+
+      // 1️⃣ Restore the document to its original collection
+      await addDoc(collection(db, originalCollection), archivedData);
+      console.log(
+        `Restored document from ${archiveCollection} to ${originalCollection}.`
+      );
+
+      // 2️⃣ Delete the document from the archive collection
+      await deleteDoc(doc(db, archiveCollection, archiveId));
+      console.log(
+        `Deleted archived document ${archiveId} from ${archiveCollection}.`
+      );
+
+      // Optional: remove it from local state immediately
+      switch (archiveCollection) {
+        case "usersArchive":
+          setUserArchives((prev) =>
+            prev.filter((item) => item.id !== archiveId)
+          );
+          break;
+        case "ordersArchive":
+          setOrders((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "toshipArchive":
+          setToShip((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "toreceiveArchive":
+          setToReceive((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "return_refundArchive":
+          setRefund((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "completedArchive":
+          setCompleted((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "cancelledArchive":
+          setCancelled((prev) => prev.filter((item) => item.id !== archiveId));
+          break;
+        case "adminArchive":
+          setAdminArchives((prev) =>
+            prev.filter((item) => item.id !== archiveId)
+          );
+          break;
+        case "sellerArchive":
+          setSellerArchives((prev) =>
+            prev.filter((item) => item.id !== archiveId)
+          );
+          break;
+        case "removedProducts":
+          setRemovedProducts((prev) =>
+            prev.filter((item) => item.id !== archiveId)
+          );
+          break;
+      }
+    } catch (err) {
+      console.error("Error restoring archived document:", err);
+    } finally {
+      setRestoreModalOpen(false);
+      setRestoreItem(null);
+      setRestoreType("");
+    }
+  };
+
+  const handleRestoreUserWithAllData = async (userId) => {
+    try {
+      setRestoreLoading(true);
+      const batch = writeBatch(db); // initialize batch
+
+      // Map archive collections to their original collections
+      const collectionsMap = {
+        usersArchive: "users",
+        shippingLocationsArchive: "shippingLocations",
+        chatMessagesArchive: "chatMessages",
+        completedArchive: "completed",
+        cancelledArchive: "cancelled",
+        cartItemsArchive: "cartItems",
+        measurementsArchive: "measurements",
+        notificationsArchive: "notifications",
+        ordersArchive: "orders",
+        return_refundArchive: "return_refund",
+        toreceiveArchive: "toReceive",
+        toshipArchive: "toShip",
+      };
+
+      // 1️⃣ Restore main user doc
+      const userSnap = await getDocs(collection(db, "usersArchive"));
+      const userDoc = userSnap.docs.find((doc) => doc.data().userId === userId);
+      if (!userDoc) return console.error("Archived user not found.");
+
+      const userData = userDoc.data();
+      const userRef = doc(collection(db, "users"));
+      batch.set(userRef, userData); // restore user
+      batch.delete(doc(db, "usersArchive", userDoc.id)); // remove from archive
+
+      // 2️⃣ Restore all related collections
+      for (const [archiveCol, originalCol] of Object.entries(collectionsMap)) {
+        if (archiveCol === "usersArchive") continue; // skip main user doc
+
+        const q = query(
+          collection(db, archiveCol),
+          where("userId", "==", userId)
+        );
+        const colSnap = await getDocs(q);
+
+        colSnap.docs.forEach((docItem) => {
+          const originalRef = doc(collection(db, originalCol));
+          batch.set(originalRef, docItem.data()); // restore
+          batch.delete(doc(db, archiveCol, docItem.id)); // remove archive
+        });
+      }
+
+      // 3️⃣ Commit the batch
+      await batch.commit();
+
+      console.log(`User ${userId} and all related data restored successfully.`);
+
+      // 4️⃣ Update local state to remove from UI
+      setUserArchives((prev) => prev.filter((u) => u.userId !== userId));
+      setOrders((prev) => prev.filter((o) => o.userId !== userId));
+      setToShip((prev) => prev.filter((o) => o.userId !== userId));
+      setToReceive((prev) => prev.filter((o) => o.userId !== userId));
+      setRefund((prev) => prev.filter((o) => o.userId !== userId));
+      setCompleted((prev) => prev.filter((o) => o.userId !== userId));
+      setCancelled((prev) => prev.filter((o) => o.userId !== userId));
+
+      await logAdminAction({
+        actionDescription: `Restored user ${userId} and all related data`,
+        userIdAffected: userId,
+      });
+    } catch (err) {
+      console.error("Error restoring user and related data:", err);
+    } finally {
+      setRestoreLoading(false); // stop loading
+    }
+  };
+
+  const handleRestoreClick = (item, type) => {
+    let archiveCollection = "";
+
+    switch (type) {
+      case "Users":
+        archiveCollection = "usersArchive";
+        break;
+      case "Orders":
+        archiveCollection = "ordersArchive";
+        break;
+      case "To Ship":
+        archiveCollection = "toshipArchive";
+        break;
+      case "To Receive":
+        archiveCollection = "toreceiveArchive";
+        break;
+      case "Return/Refund":
+        archiveCollection = "return_refundArchive";
+        break;
+      case "Completed":
+        archiveCollection = "completedArchive";
+        break;
+      case "Cancelled":
+        archiveCollection = "cancelledArchive";
+        break;
+      case "Admin":
+        archiveCollection = "adminArchive";
+        break;
+      case "Seller":
+        archiveCollection = "sellerArchive";
+        break;
+      case "Products":
+        archiveCollection = "removedProducts";
+        break;
+      default:
+        console.error("Unknown type:", type);
+        return;
+    }
+
+    setRestoreItem({ ...item, archiveCollection });
+    setRestoreType(type);
+    setRestoreModalOpen(true);
+  };
+
+  const handleRestoreClickForUser = (item) => {
+    if (!item || !item.userId) return;
+
+    setRestoreUserItem(item); // store the clicked user
+    setRestoreUserModalOpen(true); // open user restore modal
+  };
+
+  const RestoreIcon = ({ onClick }) => (
+    <svg
+      onClick={onClick}
+      xmlns="http://www.w3.org/2000/svg"
+      height="40"
+      width="40"
+      viewBox="0 0 48 48"
+      style={{ cursor: "pointer" }}
+    >
+      <path d="M24 44q-4.2 0-7.85-1.6-3.65-1.6-6.325-4.3Q7.15 35.4 5.55 31.75 3.95 28.1 3.95 23.9q0-4.3 1.525-8.025 1.525-3.725 4.25-6.475Q12.45 6.65 16.2 5.1 19.95 3.55 24.3 3.55q5.6 0 10.05 2.65 4.45 2.65 7.15 7.15h-4.1q-2.25-3.4-5.75-5.225T24.3 6.3q-7.4 0-12.5 5.125T6.7 23.9q0 7.4 5.1 12.5t12.5 5.1q5.85 0 10.325-3.575Q38.1 34.35 39.7 28.9h3.95q-1.75 7.15-7.275 11.65Q30.85 45 24 45Zm2.1-10.65-8.4-8.4 8.4-8.4 2.15 2.1-5.05 5h14.2v3h-14.2l5.05 5.05Z" />
+    </svg>
+  );
+  const ProductIcon = () => <span style={{ fontSize: "50px" }}>📦</span>;
+
   return (
     <PageContainer>
       <Title>Archives</Title>
@@ -211,266 +483,1019 @@ const Archives = () => {
         ))}
       </NavBar>
 
-      {activeTab === "Users" &&
-        userArchives.map((item, index) => (
-          <Card key={index}>
-            <CardField>
-              <FieldLabel>User ID: </FieldLabel> {item.userId || "N/A"}
-            </CardField>
-            <CardField>
-              <FieldLabel>Username: </FieldLabel> {item.username || "N/A"}
-            </CardField>
-            <CardField>
-              <FieldLabel>Email: </FieldLabel> {item.email || "N/A"}
-            </CardField>
-            <CardField>
-              <FieldLabel>Archived At: </FieldLabel>
-              {item.archivedAt?.toDate().toLocaleString() || "N/A"}
-            </CardField>
-          </Card>
-        ))}
+      {activeTab === "Users" && (
+        <ListContainer>
+          {userArchives.map((item, index) => (
+            <ListItem
+              key={index}
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+              }}
+            >
+              {/* User Icon */}
+              <div style={{ fontSize: "36px", color: "#555" }}>
+                <PersonIcon />
+              </div>
+
+              {/* User Info */}
+              <ItemInfo style={{ flex: 1 }}>
+                <div>
+                  <FieldLabel>User ID:</FieldLabel> {item.userId}
+                </div>
+                <div>
+                  <FieldLabel>Username:</FieldLabel> {item.username}
+                </div>
+                <div>
+                  <FieldLabel>Email:</FieldLabel> {item.email}
+                </div>
+              </ItemInfo>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+                onClick={() => handleRestoreClickForUser(item)} // use the new function
+              >
+                <RestoreIcon />
+                <span
+                  style={{
+                    marginTop: "4px",
+                    fontSize: "10px",
+                    fontWeight: "600",
+                    color: "black",
+                  }}
+                >
+                  Restore
+                </span>
+              </div>
+
+              {/* Timestamp Bottom Right */}
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "8px",
+                  right: "12px",
+                  fontSize: "12px",
+                  opacity: 0.7,
+                }}
+              >
+                {item.archivedAt
+                  ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                    item.archivedAt.toLocaleString?.() ||
+                    "N/A"
+                  : "N/A"}
+              </div>
+            </ListItem>
+          ))}
+        </ListContainer>
+      )}
 
       {activeTab === "Seller" && (
         <>
-          <SectionTitle>Seller Archive</SectionTitle>
-          <CardGrid>
-            {sellerArchives.length === 0 ? (
-              <p>No archived sellers found.</p>
-            ) : (
-              sellerArchives.map((item) => (
-                <Card key={item.id}>
-                  <CardField>
-                    <FieldLabel>ID: </FieldLabel> {item.id || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Email: </FieldLabel> {item.email || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Role: </FieldLabel> {item.role || "Seller"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Archived At: </FieldLabel>{" "}
-                    {item.archivedAt?.toDate().toLocaleString() || "N/A"}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
+          <ListContainer>
+            {sellerArchives.map((item) => (
+              <ListItem
+                key={item.id}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Person Icon (same as Users) */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <PersonIcon />
+                </div>
+
+                {/* Seller Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>Name:</FieldLabel> {item.name}
+                  </div>
+                  <div>
+                    <FieldLabel>Email:</FieldLabel> {item.email}
+                  </div>
+                  <div>
+                    <FieldLabel>Role:</FieldLabel> {item.role}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button (same as Users) */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right (copied layout) */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt?.toDate().toLocaleString() || "N/A"}
+                </div>
+              </ListItem>
+            ))}
+          </ListContainer>
         </>
       )}
 
       {activeTab === "Admin" && (
         <>
-          <SectionTitle>Admin Archive</SectionTitle>
-          <CardGrid>
+          <ListContainer>
             {adminArchives.length === 0 ? (
               <p>No archived admins found.</p>
             ) : (
               adminArchives.map((item) => (
-                <Card key={item.id}>
-                  <CardField>
-                    <FieldLabel>ID: </FieldLabel> {item.id}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Email: </FieldLabel> {item.email || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Role: </FieldLabel> {item.role || "Admin"}
-                  </CardField>
-                </Card>
+                <ListItem
+                  key={item.id}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "16px",
+                  }}
+                >
+                  {/* Person Icon (same as Users/Seller) */}
+                  <div style={{ fontSize: "36px", color: "#555" }}>
+                    <PersonIcon />
+                  </div>
+
+                  {/* Admin Info */}
+                  <ItemInfo style={{ flex: 1 }}>
+                    <div>
+                      <FieldLabel>Name:</FieldLabel> {item.name || "N/A"}
+                    </div>
+                    <div>
+                      <FieldLabel>Email:</FieldLabel> {item.email || "N/A"}
+                    </div>
+                    <div>
+                      <FieldLabel>Role:</FieldLabel> {item.role || "Admin"}
+                    </div>
+                  </ItemInfo>
+
+                  {/* Restore Button (same as Users) */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => handleRestoreClick(item, activeTab)}
+                  >
+                    <RestoreIcon />
+                    <span
+                      style={{
+                        marginTop: "4px",
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: "black",
+                      }}
+                    >
+                      Restore
+                    </span>
+                  </div>
+
+                  {/* Timestamp Bottom Right (same as Users/Seller) */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "8px",
+                      right: "12px",
+                      fontSize: "12px",
+                      opacity: 0.7,
+                    }}
+                  >
+                    {item.archivedAt?.toDate().toLocaleString() || "N/A"}
+                  </div>
+                </ListItem>
               ))
             )}
-          </CardGrid>
+          </ListContainer>
         </>
       )}
 
       {activeTab === "Orders" && (
-        <>
-          <SectionTitle>Orders Archive</SectionTitle>
-          <CardGrid>
-            {orders.length === 0 ? (
-              <p>No archived orders found.</p>
-            ) : (
-              orders.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Total: </FieldLabel> {item.total || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Date: </FieldLabel> {item.date || "N/A"}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {orders.length === 0 ? (
+            <p>No archived orders found.</p>
+          ) : (
+            orders.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon /> {/* Replace with your actual product icon */}
+                </div>
+
+                {/* Order Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>Order ID:</FieldLabel> {item.orderId}
+                  </div>
+                  <div>
+                    <FieldLabel>Total:</FieldLabel> {item.total}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
+
       {activeTab === "To Ship" && (
-        <>
-          <SectionTitle>To Ship Archive</SectionTitle>
-          <CardGrid>
-            {toShip.length === 0 ? (
-              <p>No items in To Ship.</p>
-            ) : (
-              toShip.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {toShip.length === 0 ? (
+            <p>No items in To Ship.</p>
+          ) : (
+            toShip.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon /> {/* Replace with your actual product icon */}
+                </div>
+
+                {/* Order Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>To Ship ID:</FieldLabel> {item.toshipID}
+                  </div>
+                  <div>
+                    <FieldLabel>Name:</FieldLabel> {item.name}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
+
       {activeTab === "To Receive" && (
-        <>
-          <SectionTitle>To Receive Archive</SectionTitle>
-          <CardGrid>
-            {toReceive.length === 0 ? (
-              <p>No items in To Receive.</p>
-            ) : (
-              toReceive.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {toReceive.length === 0 ? (
+            <p>No items in To Receive.</p>
+          ) : (
+            toReceive.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon />{" "}
+                  {/* Replace with your actual product icon component */}
+                </div>
+
+                {/* Order Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>To Receive ID:</FieldLabel> {item.toreceiveID}
+                  </div>
+                  <div>
+                    <FieldLabel>Name:</FieldLabel> {item.name}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
+
       {activeTab === "Return/Refund" && (
-        <>
-          <SectionTitle>Return / Refund Archive</SectionTitle>
-          <CardGrid>
-            {refund.length === 0 ? (
-              <p>No return/refund data.</p>
-            ) : (
-              refund.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Reason: </FieldLabel> {item.reason}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {refund.length === 0 ? (
+            <p>No return/refund data.</p>
+          ) : (
+            refund.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon /> {/* Replace with your actual product icon */}
+                </div>
+
+                {/* Refund Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>Return/Refund ID:</FieldLabel> {item.orderId}
+                  </div>
+                  <div>
+                    <FieldLabel>Reason:</FieldLabel> {item.reason}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
+
       {activeTab === "Completed" && (
-        <>
-          <SectionTitle>Completed Orders</SectionTitle>
-          <CardGrid>
-            {completed.length === 0 ? (
-              <p>No completed orders.</p>
-            ) : (
-              completed.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {completed.length === 0 ? (
+            <p>No completed orders.</p>
+          ) : (
+            completed.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon />{" "}
+                  {/* Replace with your actual product icon component */}
+                </div>
+
+                {/* Order Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>Completed ID:</FieldLabel> {item.completedID}
+                  </div>
+                  <div>
+                    <FieldLabel>Name:</FieldLabel> {item.name}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
+
       {activeTab === "Cancelled" && (
-        <>
-          <SectionTitle>Cancelled Orders</SectionTitle>
-          <CardGrid>
-            {cancelled.length === 0 ? (
-              <p>No cancelled orders.</p>
-            ) : (
-              cancelled.map((item, index) => (
-                <Card key={index}>
-                  <CardField>
-                    <FieldLabel>Order ID: </FieldLabel> {item.orderId}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.name}
-                  </CardField>
-                </Card>
-              ))
-            )}
-          </CardGrid>
-        </>
+        <ListContainer>
+          {cancelled.length === 0 ? (
+            <p>No cancelled orders.</p>
+          ) : (
+            cancelled.map((item, index) => (
+              <ListItem
+                key={index}
+                style={{
+                  position: "relative",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px",
+                }}
+              >
+                {/* Product Icon */}
+                <div style={{ fontSize: "36px", color: "#555" }}>
+                  <ProductIcon />{" "}
+                  {/* Replace with your actual product icon component */}
+                </div>
+
+                {/* Order Info */}
+                <ItemInfo style={{ flex: 1 }}>
+                  <div>
+                    <FieldLabel>Cancelled ID:</FieldLabel> {item.cancelledID}
+                  </div>
+                  <div>
+                    <FieldLabel>User's name:</FieldLabel> {item.name}
+                  </div>
+                  <div>
+                    <FieldLabel>Product name:</FieldLabel>{" "}
+                    {Array.isArray(item.items) && item.items.length > 0
+                      ? item.items[0].productName
+                      : "N/A"}
+                  </div>
+                </ItemInfo>
+
+                {/* Restore Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => handleRestoreClick(item, activeTab)}
+                >
+                  <RestoreIcon />
+                  <span
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "10px",
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    Restore
+                  </span>
+                </div>
+
+                {/* Timestamp Bottom Right */}
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "8px",
+                    right: "12px",
+                    fontSize: "12px",
+                    opacity: 0.7,
+                  }}
+                >
+                  {item.archivedAt
+                    ? item.archivedAt.toDate?.()?.toLocaleString() ||
+                      item.archivedAt.toLocaleString?.() ||
+                      "N/A"
+                    : "N/A"}
+                </div>
+              </ListItem>
+            ))
+          )}
+        </ListContainer>
       )}
 
       {activeTab === "Products" && (
         <>
-          <SectionTitle>Removed Products</SectionTitle>
-          <CardGrid>
+          <ListContainer>
             {removedProducts.length === 0 ? (
               <p>No removed products found.</p>
             ) : (
               removedProducts.map((item) => (
-                <Card key={item.id}>
-                  <CardField>
-                    <FieldLabel>Product ID: </FieldLabel>{" "}
-                    {item.productID || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Name: </FieldLabel> {item.productName || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Category: </FieldLabel> {item.categoryMain} /{" "}
-                    {item.categorySub}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Price: </FieldLabel> {item.price || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Total Stock: </FieldLabel>{" "}
-                    {item.totalStock || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Removed By: </FieldLabel>{" "}
-                    {item.removedBy || "N/A"}
-                  </CardField>
-                  <CardField>
-                    <FieldLabel>Removed At: </FieldLabel>{" "}
-                    {item.removedAt?.toDate().toLocaleString() || "N/A"}
-                  </CardField>
-                  <CardField>
+                <ListItem
+                  key={item.id}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  {/* Left Side: Image + Info */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "15px",
+                      alignItems: "center",
+                    }}
+                  >
                     <img
                       src={item.imageUrl}
                       alt={item.productName}
                       style={{
-                        width: "100%",
+                        width: "150px",
+                        height: "150px",
                         borderRadius: "8px",
-                        marginTop: "10px",
+                        objectFit: "cover",
                       }}
                     />
-                  </CardField>
-                </Card>
+
+                    <ItemInfo>
+                      <div>
+                        <FieldLabel>Product ID:</FieldLabel> {item.productID}
+                      </div>
+                      <div>
+                        <FieldLabel>Name:</FieldLabel> {item.productName}
+                      </div>
+                      <div>
+                        <FieldLabel>Category:</FieldLabel> {item.categoryMain} /{" "}
+                        {item.categorySub}
+                      </div>
+                      <div>
+                        <FieldLabel>Price:</FieldLabel> ₱{item.price}
+                      </div>
+                      <div>
+                        <FieldLabel>Removed By:</FieldLabel> {item.removedBy}
+                      </div>
+                    </ItemInfo>
+                  </div>
+
+                  {/* Restore Button (same layout as Users/Seller/Admin) */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      cursor: "pointer",
+                      marginLeft: "20px",
+                    }}
+                    onClick={() => handleRestoreClick(item, activeTab)}
+                  >
+                    <RestoreIcon />
+                    <span
+                      style={{
+                        marginTop: "4px",
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: "black",
+                      }}
+                    >
+                      Restore
+                    </span>
+                  </div>
+
+                  {/* Timestamp Bottom Right */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "10px",
+                      right: "12px",
+                      fontSize: "12px",
+                      opacity: 0.7,
+                    }}
+                  >
+                    {item.removedAt?.toDate().toLocaleString() || "N/A"}
+                  </div>
+                </ListItem>
               ))
             )}
-          </CardGrid>
+          </ListContainer>
         </>
+      )}
+      {restoreModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px 30px",
+              borderRadius: "12px",
+              maxWidth: "400px",
+              textAlign: "center",
+              color: "#000",
+            }}
+          >
+            <h3>Confirm Restore</h3>
+            <p>
+              Are you sure you want to restore this {restoreType.toLowerCase()}{" "}
+              archive data?
+            </p>
+            <div
+              style={{
+                marginTop: "20px",
+                display: "flex",
+                justifyContent: "center",
+                gap: "20px",
+              }}
+            >
+              <button
+                onClick={() => setRestoreModalOpen(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                }}
+              >
+                No
+              </button>
+              <button
+                onClick={handleConfirmRestore}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  backgroundColor: "#6f42c1",
+                  color: "#fff",
+                }}
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {restoreUserModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+            pointerEvents: restoreLoading ? "none" : "auto", // disable interactions if loading
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px 30px",
+              borderRadius: "12px",
+              maxWidth: "400px",
+              textAlign: "center",
+              color: "#000",
+              position: "relative",
+            }}
+          >
+            <h3>Confirm Restore User</h3>
+            <p>
+              Do you want to restore this user{" "}
+              <strong>{restoreUserItem?.username}</strong>?
+              <br />
+              You can choose to restore just the main user doc or all related
+              data.
+            </p>
+
+            {restoreLoading && (
+              <p
+                style={{
+                  color: "#6f42c1",
+                  fontWeight: "600",
+                  marginTop: "10px",
+                }}
+              >
+                Restoring data, please wait...
+              </p>
+            )}
+
+            <div
+              style={{
+                marginTop: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                alignItems: "center",
+              }}
+            >
+              <button
+                onClick={async () => {
+                  setRestoreLoading(true);
+                  await handleRestoreUserOnly(restoreUserItem?.userId);
+                  setRestoreLoading(false);
+                  setRestoreUserModalOpen(false);
+                  setRestoreUserItem(null);
+                }}
+                disabled={restoreLoading}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: restoreLoading ? "not-allowed" : "pointer",
+                  width: "80%",
+                  backgroundColor: "#0d6efd",
+                  color: "#fff",
+                }}
+              >
+                Restore User Only
+              </button>
+
+              <button
+                onClick={async () => {
+                  setRestoreLoading(true);
+                  await handleRestoreUserWithAllData(restoreUserItem?.userId);
+                  setRestoreLoading(false);
+                  setRestoreUserModalOpen(false);
+                  setRestoreUserItem(null);
+                }}
+                disabled={restoreLoading}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: restoreLoading ? "not-allowed" : "pointer",
+                  width: "80%",
+                  backgroundColor: "#6f42c1",
+                  color: "#fff",
+                }}
+              >
+                Restore User with All Data
+              </button>
+
+              <button
+                onClick={() => {
+                  if (restoreLoading) return;
+                  setRestoreUserModalOpen(false);
+                  setRestoreUserItem(null);
+                }}
+                disabled={restoreLoading}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "8px",
+                  cursor: restoreLoading ? "not-allowed" : "pointer",
+                  width: "80%",
+                  backgroundColor: "#dc3545",
+                  color: "#fff",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {restoreLoading && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 10000,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-start", // push content to the top
+            paddingTop: "150px", // adjust vertical offset from top
+            color: "#fff",
+            fontSize: "18px",
+            fontWeight: "600",
+          }}
+        >
+          Please wait, user data is being restored...
+        </div>
       )}
     </PageContainer>
   );

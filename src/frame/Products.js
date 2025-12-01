@@ -1162,7 +1162,9 @@ const Products = () => {
                 fontSize: "20px",
               }}
             >
-              <p>Are you sure you want to remove {productToDelete?.name}?</p>
+              <p>
+                Are you sure you want to remove {productToDelete?.productName}?
+              </p>
               <div
                 style={{
                   display: "flex",

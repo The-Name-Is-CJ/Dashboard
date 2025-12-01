@@ -137,12 +137,25 @@ const AdminLogin = () => {
         setIsLoading(false); // ⬅️ STOP LOADING
         return;
       }
+      let adminEmail = "Unknown admin";
+      let adminRole = "Admin"; // fallback
+      try {
+        const adminSnap = await getDocs(collection(db, "admins"));
+        if (!adminSnap.empty) {
+          const adminDoc = adminSnap.docs[0].data();
+          adminEmail = adminDoc.email || "Unknown admin";
+          adminRole = adminDoc.role || "Admin"; // get role from the doc
+        }
+      } catch (err) {
+        console.error("Error fetching admin info:", err);
+      }
 
       const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       await addDoc(collection(db, "recentActivityLogs"), {
         logID,
         action: "Admin logged in",
-        userEmail: user.email,
+        userEmail: adminEmail,
+        role: adminRole,
         timestamp: serverTimestamp(),
       });
 

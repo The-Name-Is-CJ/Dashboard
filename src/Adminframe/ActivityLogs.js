@@ -23,6 +23,7 @@ const ActivityLogs = () => {
   const [sellerLogs, setSellerLogs] = useState([]);
   const [selectedLog, setSelectedLog] = useState(null); // <-- selected log
   const [selectedUserName, setSelectedUserName] = useState("");
+  const [adminLogs, setAdminLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // --- PARAPHRASING LOGIC ---
@@ -211,6 +212,47 @@ const ActivityLogs = () => {
     fetchUsername();
   }, [selectedLog]);
 
+  useEffect(() => {
+    if (activeTab !== "admin") return;
+
+    const fetchAdminLogs = async () => {
+      try {
+        // Fetch all admins
+        const adminsSnapshot = await getDocs(collection(db, "admins"));
+        if (adminsSnapshot.empty) {
+          console.error("No admin documents found");
+          setAdminLogs([]);
+          return;
+        }
+
+        // Extract emails from all admin docs
+        const adminEmails = adminsSnapshot.docs.map((doc) =>
+          doc.data().email?.toLowerCase()
+        );
+
+        // Query all recentActivityLogs where userEmail is in adminEmails
+        const logsSnapshot = await getDocs(
+          collection(db, "recentActivityLogs")
+        );
+        const logs = logsSnapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            return { id: doc.id, ...data };
+          })
+          .filter((log) => adminEmails.includes(log.userEmail?.toLowerCase())); // match emails
+
+        console.log("Fetched admin logs:", logs);
+
+        setAdminLogs(logs);
+      } catch (err) {
+        console.error("Error fetching admin logs:", err);
+        setAdminLogs([]);
+      }
+    };
+
+    fetchAdminLogs();
+  }, [activeTab]);
+
   if (loading) return <p style={{ padding: "20px" }}>Loading logs...</p>;
 
   return (
@@ -218,11 +260,12 @@ const ActivityLogs = () => {
       <h1 style={styles.header}>Activity Logs</h1>
 
       {/* Tabs */}
+      {/* Tabs */}
       <div style={styles.tabContainer} onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => {
             setActiveTab("user");
-            setSelectedLog(null); // reset details panel
+            setSelectedLog(null);
           }}
           style={{
             ...styles.tab,
@@ -234,7 +277,7 @@ const ActivityLogs = () => {
         <button
           onClick={() => {
             setActiveTab("seller");
-            setSelectedLog(null); // reset details panel
+            setSelectedLog(null);
           }}
           style={{
             ...styles.tab,
@@ -242,6 +285,18 @@ const ActivityLogs = () => {
           }}
         >
           Sellers
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("admin");
+            setSelectedLog(null);
+          }}
+          style={{
+            ...styles.tab,
+            ...(activeTab === "admin" ? styles.activeTab : {}),
+          }}
+        >
+          Admin
         </button>
       </div>
 
@@ -312,10 +367,40 @@ const ActivityLogs = () => {
               )}
             </>
           )}
+          {activeTab === "admin" && (
+            <>
+              {adminLogs.length === 0 ? (
+                <p style={styles.noLogs}>No admin logs found.</p>
+              ) : (
+                adminLogs
+                  .sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds)
+                  .map((log) => (
+                    <div
+                      key={log.id}
+                      style={{
+                        ...styles.logCard,
+                        ...(selectedLog?.id === log.id
+                          ? styles.selectedLogCard
+                          : {}),
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedLog(log);
+                      }}
+                    >
+                      <p style={styles.logMessage}>{log.action}</p>{" "}
+                      {/* display as-is */}
+                      <span style={styles.logTimestamp}>
+                        {formatTimestamp(log.timestamp)}
+                      </span>
+                    </div>
+                  ))
+              )}
+            </>
+          )}
         </div>
+        {/* Details Panel */}
 
-        {/* Details Panel */}
-        {/* Details Panel */}
         <div style={styles.detailsPanel}>
           {selectedLog ? (
             <>
@@ -323,11 +408,13 @@ const ActivityLogs = () => {
                 <h3>
                   {activeTab === "user"
                     ? "Users Activity Details"
-                    : "Seller Activity Details"}
+                    : activeTab === "seller"
+                    ? "Seller Activity Details"
+                    : "Admin Activity Details"}
                 </h3>
               </div>
               <div style={styles.detailsContent}>
-                {activeTab === "user" ? (
+                {activeTab === "user" && (
                   <>
                     <div style={styles.detailRow}>
                       <span style={styles.detailLabel}>User ID:</span>
@@ -340,7 +427,7 @@ const ActivityLogs = () => {
                       <span style={styles.detailValue}>{selectedUserName}</span>
                     </div>
                     <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>Message:</span>
+                      <span style={styles.detailLabel}>Activity:</span>
                       <span style={styles.detailValue}>
                         {selectedLog.rewritten}
                       </span>
@@ -370,20 +457,29 @@ const ActivityLogs = () => {
                       </div>
                     )}
                   </>
-                ) : (
+                )}
+
+                {(activeTab === "seller" || activeTab === "admin") && (
                   <>
                     <div style={styles.detailRow}>
                       <span style={styles.detailLabel}>Log ID:</span>
                       <span style={styles.detailValue}>
-                        {selectedLog.logID}
+                        {selectedLog.logID || selectedLog.id}
                       </span>
                     </div>
                     <div style={styles.detailRow}>
-                      <span style={styles.detailLabel}>User Email:</span>
+                      <span style={styles.detailLabel}>
+                        {activeTab === "seller"
+                          ? "Seller Email:"
+                          : activeTab === "admin"
+                          ? "Admin Email:"
+                          : "User Email:"}
+                      </span>
                       <span style={styles.detailValue}>
                         {selectedLog.userEmail}
                       </span>
                     </div>
+
                     <div style={styles.detailRow}>
                       <span style={styles.detailLabel}>Role:</span>
                       <span style={styles.detailValue}>{selectedLog.role}</span>
@@ -391,11 +487,15 @@ const ActivityLogs = () => {
                     <div style={styles.detailRow}>
                       <span style={styles.detailLabel}>Action:</span>
                       <span style={styles.detailValue}>
-                        {selectedLog.rewritten}
+                        {activeTab === "seller"
+                          ? selectedLog.rewritten
+                          : selectedLog.action}{" "}
+                        {/* Admin shows action as-is */}
                       </span>
                     </div>
                   </>
                 )}
+
                 <div style={styles.detailRow}>
                   <span style={styles.detailLabel}>Timestamp:</span>
                   <span style={styles.detailValue}>

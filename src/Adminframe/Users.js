@@ -10,6 +10,8 @@ import {
   collection,
   serverTimestamp,
   updateDoc,
+  writeBatch,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../firebase";
 
@@ -254,6 +256,22 @@ const CancelButton = styled.button`
     opacity: 0.85;
   }
 `;
+const LoaderOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); // semi-transparent
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; // move content toward top
+  padding-top: 20%; // adjust this value to move it higher or lower
+  z-index: 2000; // higher than your modal
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 600;
+`;
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -266,14 +284,18 @@ const Users = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const usersSnapshot = await getDocs(collection(db, "users"));
-        const usersList = usersSnapshot.docs.map((doc) => {
+    // Reference to the users collection
+    const usersRef = collection(db, "users");
+
+    // Real-time listener
+    const unsubscribe = onSnapshot(
+      usersRef,
+      (snapshot) => {
+        const usersList = snapshot.docs.map((doc) => {
           const data = doc.data();
           return {
-            docId: doc.id, // Firestore doc ID (hidden, for updates/deletes)
-            id: data.userId || doc.id, // userId shown in table
+            docId: doc.id, // Firestore doc ID
+            id: data.userId || doc.id,
             name: data.name?.trim() || "N/A",
             username: data.username?.trim() || "N/A",
             email: data.email?.trim() || "N/A",
@@ -282,6 +304,7 @@ const Users = () => {
           };
         });
 
+        // Sort users by user ID
         usersList.sort((a, b) => {
           const numA = parseInt(a.id.replace(/^U0*/, ""), 10);
           const numB = parseInt(b.id.replace(/^U0*/, ""), 10);
@@ -289,14 +312,16 @@ const Users = () => {
         });
 
         setUsers(usersList);
-      } catch (err) {
+        setLoading(false);
+      },
+      (err) => {
         console.error("Error fetching users:", err);
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    fetchUsers();
+    // Cleanup listener on unmount
+    return () => unsubscribe();
   }, []);
 
   const filteredUsers = users.filter((user) => {
@@ -333,7 +358,9 @@ const Users = () => {
 
   const handleRemove = async (userId) => {
     try {
-      // 1. Get user main doc
+      const batch = writeBatch(db); // Initialize batch
+
+      // 1️⃣ Get user main doc
       const usersSnapshot = await getDocs(collection(db, "users"));
       const userDoc = usersSnapshot.docs.find(
         (doc) => doc.data().userId === userId
@@ -341,45 +368,61 @@ const Users = () => {
       if (!userDoc) return;
       const userData = userDoc.data();
 
-      // 2. Prepare archive object
-      const archiveData = {
-        userId,
-        users: userData,
-        archivedAt: serverTimestamp(),
+      // 2️⃣ Define collections and their archive counterparts
+      const collectionsMap = {
+        users: "usersArchive",
+        shippingLocations: "shippingLocationsArchive",
+        chatMessages: "chatMessagesArchive",
+        completed: "completedArchive",
+        cancelled: "cancelledArchive",
+        cartItems: "cartItemsArchive",
+        measurements: "measurementsArchive",
+        notifications: "notificationsArchive",
+        orders: "ordersArchive",
+        return_refund: "return_refundArchive",
+        toReceive: "toreceiveArchive",
+        toShip: "toshipArchive",
       };
 
-      // 3. List of collections to archive
-      const collectionsToArchive = [
-        "shippingLocations",
-        "adminArchive",
-        "chatMessages",
-        "completed",
-        "measurements",
-        "notifications",
-        "orders",
-        "return_refund",
-        "toReceive",
-        "toShip",
-      ];
+      // 3️⃣ Archive the main user data
+      const userArchiveRef = doc(collection(db, collectionsMap["users"]));
+      batch.set(userArchiveRef, { ...userData, archivedAt: serverTimestamp() });
+      batch.delete(doc(db, "users", userDoc.id));
 
-      for (const col of collectionsToArchive) {
+      // 4️⃣ Archive other collections
+      for (const [col, archiveCol] of Object.entries(collectionsMap)) {
+        if (col === "users") continue;
+
         const q = query(collection(db, col), where("userId", "==", userId));
         const colSnapshot = await getDocs(q);
-        archiveData[col] = colSnapshot.docs.map((d) => d.data());
+
+        colSnapshot.docs.forEach((docItem) => {
+          const archiveRef = doc(collection(db, archiveCol));
+          batch.set(archiveRef, {
+            ...docItem.data(),
+            archivedAt: serverTimestamp(),
+          });
+          batch.delete(doc(db, col, docItem.id));
+        });
       }
 
-      await addDoc(collection(db, "usersArchive"), archiveData);
+      // 5️⃣ Commit batch
+      await batch.commit();
 
-      const userRef = doc(db, "users", userDoc.id);
-      await deleteDoc(userRef);
+      // 6️⃣ Update local state
+      setUsers((prev) => prev.filter((u) => u.userId !== userId));
 
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      await logAdminAction({
+        actionDescription: `Archived user ${userId} and all users data`,
+        userIdAffected: userId,
+      });
 
-      console.log(`User ${userId} archived successfully.`);
+      console.log(`User ${userId} and all related data archived successfully.`);
     } catch (err) {
       console.error("Error archiving user:", err);
     }
   };
+
   const logAdminAction = async ({ actionDescription, userIdAffected }) => {
     try {
       // Get current admin info (assuming you have admins collection and user is logged in)
@@ -525,33 +568,48 @@ const Users = () => {
             <ModalButtons>
               <ConfirmButton
                 onClick={async () => {
-                  if (saving) return;
+                  if (saving) return; // prevent double clicks
                   setSaving(true);
-                  if (modalAction === "block") {
-                    await handleBlockToggle(
-                      selectedUser.id,
-                      blockStatusPending
-                    );
-                  } else if (modalAction === "remove") {
-                    await handleRemove(selectedUser.id);
+
+                  try {
+                    if (modalAction === "block") {
+                      await handleBlockToggle(
+                        selectedUser.id,
+                        blockStatusPending
+                      );
+                    } else if (modalAction === "remove") {
+                      await handleRemove(selectedUser.id);
+                    }
+                  } catch (err) {
+                    console.error("Error during action:", err);
+                  } finally {
+                    setSaving(false);
+                    setModalOpen(false);
+                    setSelectedUser(null);
                   }
-                  setSaving(false);
-                  setModalOpen(false);
-                  setSelectedUser(null);
                 }}
+                disabled={saving} // disable while saving
               >
                 {saving ? "Saving..." : "Yes"}
               </ConfirmButton>
 
               <CancelButton
                 onClick={() => {
+                  if (saving) return; // prevent closing while saving
                   setModalOpen(false);
                   setSelectedUser(null);
                 }}
+                disabled={saving}
               >
                 Cancel
               </CancelButton>
             </ModalButtons>
+
+            {saving && (
+              <LoaderOverlay>
+                Please wait, data is being archived...
+              </LoaderOverlay>
+            )}
           </ModalContent>
         </ModalOverlay>
       )}
