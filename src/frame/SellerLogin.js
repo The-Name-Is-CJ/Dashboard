@@ -1,9 +1,9 @@
 import { signInWithEmailAndPassword } from "firebase/auth";
 import {
+  addDoc,
   collection,
   getDocs,
   serverTimestamp,
-  addDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -38,7 +38,7 @@ const DashLogin = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg("");
-    setIsLoading(true); // ⬅️ START LOADING
+    setIsLoading(true);
 
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -52,7 +52,7 @@ const DashLogin = () => {
         user.email.trim().toLowerCase() !== allowedEmail.trim().toLowerCase()
       ) {
         setErrorMsg("Unauthorized user.");
-        setIsLoading(false); // ⬅️ STOP LOADING
+        setIsLoading(false);
         return;
       }
 
@@ -61,6 +61,7 @@ const DashLogin = () => {
         logID,
         action: "Seller logged in",
         userEmail: user.email,
+        role: "Seller",
         timestamp: serverTimestamp(),
       });
 
@@ -80,7 +81,7 @@ const DashLogin = () => {
       }
     }
 
-    setIsLoading(false); // ⬅️ ALWAYS STOP LOADING
+    setIsLoading(false);
   };
 
   return (

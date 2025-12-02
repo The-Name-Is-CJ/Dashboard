@@ -1,16 +1,13 @@
-import React, { useEffect, useState } from "react";
 import {
   collection,
+  getDocs,
   onSnapshot,
-  doc,
-  getDoc,
   query,
   where,
-  getDocs,
 } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import { db } from "../firebase";
 
-// Utility to format timestamp nicely
 const formatTimestamp = (timestamp) => {
   if (!timestamp) return "";
   if (timestamp.toDate) return timestamp.toDate().toLocaleString();
@@ -21,12 +18,11 @@ const ActivityLogs = () => {
   const [activeTab, setActiveTab] = useState("user");
   const [userLogs, setUserLogs] = useState([]);
   const [sellerLogs, setSellerLogs] = useState([]);
-  const [selectedLog, setSelectedLog] = useState(null); // <-- selected log
+  const [selectedLog, setSelectedLog] = useState(null);
   const [selectedUserName, setSelectedUserName] = useState("");
   const [adminLogs, setAdminLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- PARAPHRASING LOGIC ---
   const rewriteMessage = (notif) => {
     const {
       message,
@@ -104,9 +100,7 @@ const ActivityLogs = () => {
     }
 
     if (action.startsWith("Edited product")) {
-      // action = "Edited product (Price, Stock)"
       return `Seller Edited product "${productName || ""}" ${action.slice(14)}`;
-      // slice removes the "Edited product" part, leaving "(Price, Stock)" etc.
     }
 
     if (action === "Seller logged in") return "Seller logged in";
@@ -115,7 +109,6 @@ const ActivityLogs = () => {
     return notif.message || "Seller action";
   };
 
-  // --- REAL-TIME FETCH ---
   useEffect(() => {
     const unsubscribe = onSnapshot(
       collection(db, "notifications"),
@@ -140,37 +133,41 @@ const ActivityLogs = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "admin") return;
+    if (activeTab !== "seller") return;
 
-    const fetchAdminLogs = async () => {
+    const fetchSellerLogs = async () => {
       try {
-        const adminRoles = ["Main Admin", "Sub Admin", "Sub Admin 2"];
-
         const q = query(
           collection(db, "recentActivityLogs"),
-          where("role", "in", adminRoles),
-          orderBy("timestamp", "desc")
+          where("role", "==", "Seller")
         );
 
         const logsSnapshot = await getDocs(q);
-        const logs = logsSnapshot.docs.map((doc) => {
-          const data = doc.data();
+
+        if (logsSnapshot.empty) {
+          console.log("No Seller logs found");
+          setSellerLogs([]);
+          return;
+        }
+
+        const logs = logsSnapshot.docs.map((logDoc) => {
+          const data = logDoc.data();
           return {
-            id: doc.id,
+            id: logDoc.id,
             ...data,
-            // you can add rewritten here if needed
+            rewritten: rewriteSellerMessage(data),
           };
         });
 
-        console.log("Fetched admin logs:", logs);
-        setAdminLogs(logs);
+        console.log("Fetched Seller logs:", logs);
+        setSellerLogs(logs);
       } catch (err) {
-        console.error("Error fetching admin logs:", err);
-        setAdminLogs([]);
+        console.error("Error fetching seller logs:", err);
+        setSellerLogs([]);
       }
     };
 
-    fetchAdminLogs();
+    fetchSellerLogs();
   }, [activeTab]);
 
   useEffect(() => {
@@ -205,31 +202,23 @@ const ActivityLogs = () => {
 
     const fetchAdminLogs = async () => {
       try {
-        // Fetch all admins
-        const adminsSnapshot = await getDocs(collection(db, "admins"));
-        if (adminsSnapshot.empty) {
-          console.error("No admin documents found");
+        const adminRoles = ["Main Admin", "Sub Admin", "Sub Admin 2"];
+
+        const logsSnapshot = await getDocs(
+          collection(db, "recentActivityLogs")
+        );
+
+        if (logsSnapshot.empty) {
+          console.log("No activity logs found");
           setAdminLogs([]);
           return;
         }
 
-        // Extract emails from all admin docs
-        const adminEmails = adminsSnapshot.docs.map((doc) =>
-          doc.data().email?.toLowerCase()
-        );
-
-        // Query all recentActivityLogs where userEmail is in adminEmails
-        const logsSnapshot = await getDocs(
-          collection(db, "recentActivityLogs")
-        );
         const logs = logsSnapshot.docs
-          .map((doc) => {
-            const data = doc.data();
-            return { id: doc.id, ...data };
-          })
-          .filter((log) => adminEmails.includes(log.userEmail?.toLowerCase())); // match emails
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .filter((log) => adminRoles.includes(log.role));
 
-        console.log("Fetched admin logs:", logs);
+        console.log("Fetched Admin logs:", logs);
 
         setAdminLogs(logs);
       } catch (err) {
@@ -247,8 +236,6 @@ const ActivityLogs = () => {
     <div style={styles.container}>
       <h1 style={styles.header}>Activity Logs</h1>
 
-      {/* Tabs */}
-      {/* Tabs */}
       <div style={styles.tabContainer} onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => {
@@ -288,12 +275,7 @@ const ActivityLogs = () => {
         </button>
       </div>
 
-      {/* Main content: logs + details */}
-      <div
-        style={styles.mainContent}
-        onClick={() => setSelectedLog(null)} // click outside clears selection
-      >
-        {/* Logs List */}
+      <div style={styles.mainContent} onClick={() => setSelectedLog(null)}>
         <div style={styles.logsContainer}>
           {activeTab === "user" && (
             <>
@@ -312,7 +294,7 @@ const ActivityLogs = () => {
                           : {}),
                       }}
                       onClick={(e) => {
-                        e.stopPropagation(); // prevent parent click
+                        e.stopPropagation();
                         setSelectedLog(log);
                       }}
                     >
@@ -377,7 +359,6 @@ const ActivityLogs = () => {
                       }}
                     >
                       <p style={styles.logMessage}>{log.action}</p>{" "}
-                      {/* display as-is */}
                       <span style={styles.logTimestamp}>
                         {formatTimestamp(log.timestamp)}
                       </span>
@@ -387,7 +368,6 @@ const ActivityLogs = () => {
             </>
           )}
         </div>
-        {/* Details Panel */}
 
         <div style={styles.detailsPanel}>
           {selectedLog ? (
@@ -478,7 +458,6 @@ const ActivityLogs = () => {
                         {activeTab === "seller"
                           ? selectedLog.rewritten
                           : selectedLog.action}{" "}
-                        {/* Admin shows action as-is */}
                       </span>
                     </div>
                   </>
@@ -540,13 +519,13 @@ const styles = {
     display: "flex",
     gap: "30px",
     alignItems: "flex-start",
-    height: "calc(100vh - 150px)", // full viewport height minus header & tabs
+    height: "calc(100vh - 150px)",
   },
   logsContainer: {
     flex: "1 1 50%",
-    overflowY: "auto", // scrollable
-    maxHeight: "90%", // keep within viewport
-    paddingRight: "10px", // prevent scrollbar overlap
+    overflowY: "auto",
+    maxHeight: "90%",
+    paddingRight: "10px",
   },
   logCard: {
     padding: "15px 20px",
@@ -594,9 +573,9 @@ const styles = {
     borderRadius: "12px",
     background: "#ffffff",
     boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
-    minHeight: "90%", // match logs height
+    minHeight: "90%",
     position: "sticky",
-    top: "0", // sticks to top of viewport
+    top: "0",
     alignSelf: "flex-start",
     display: "flex",
     flexDirection: "column",
@@ -616,7 +595,7 @@ const styles = {
   detailRow: {
     borderBottom: "1px solid #eee",
     paddingBottom: "6px",
-    marginBottom: "6px", // space between rows
+    marginBottom: "6px",
   },
   detailLabel: {
     fontWeight: "600",
@@ -625,13 +604,13 @@ const styles = {
   detailValue: {
     color: "#333",
     fontWeight: "500",
-    marginLeft: "15px", // creates a tab-like space
+    marginLeft: "15px",
   },
   emptyDetails: {
-    flex: 1, // take up remaining height
+    flex: 1,
     display: "flex",
-    alignItems: "center", // vertical center
-    justifyContent: "center", // horizontal center
+    alignItems: "center",
+    justifyContent: "center",
     color: "#777",
     fontStyle: "italic",
     fontSize: "20px",

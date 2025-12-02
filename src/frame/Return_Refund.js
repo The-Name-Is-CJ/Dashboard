@@ -44,7 +44,6 @@ const ReturnRefund = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [weeklyReturnCount, setWeeklyReturnCount] = useState(0);
 
-  // Fetch return/refund orders
   useEffect(() => {
     const returnRef = collection(db, "return_refund");
     const q = query(returnRef, orderBy("requestedAt", "desc"));
@@ -64,7 +63,6 @@ const ReturnRefund = () => {
     return () => unsubscribe();
   }, []);
 
-  // Weekly return/refund count
   useEffect(() => {
     const collectionsToWatch = ["return_refund"];
     const unsubscribes = [];
@@ -105,7 +103,6 @@ const ReturnRefund = () => {
     return () => unsubscribes.forEach((u) => u());
   }, []);
 
-  // Filter orders by search term
   const filteredOrders = orders
     .map((order) => ({
       ...order,
@@ -202,6 +199,9 @@ const ReturnRefund = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -228,6 +228,9 @@ const ReturnRefund = () => {
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
+                  </TableData>
+                  <TableData style={{ textAlign: "center" }}>
+                    {order.delivery}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.quantity}

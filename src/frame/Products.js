@@ -3,16 +3,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  onSnapshot,
   serverTimestamp,
   updateDoc,
-  onSnapshot,
-  getDoc,
-  query,
-  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { auth, db } from "../firebase";
 import { FaCheck } from "react-icons/fa";
 import {
   CancelButton,
@@ -23,6 +20,7 @@ import {
   ModalTitle,
   SaveButton,
 } from "../components/dashboardstyles";
+import { auth, db } from "../firebase";
 
 const SIZE_OPTIONS = ["S", "M", "L", "XL"];
 
@@ -69,7 +67,7 @@ const Products = () => {
     const unsubscribe = onSnapshot(collection(db, "arproducts"), (snapshot) => {
       const available = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((ar) => !ar.inUsed); // only show AR not in use
+        .filter((ar) => !ar.inUsed);
       setArProducts(available);
     });
     return () => unsubscribe();
@@ -117,26 +115,6 @@ const Products = () => {
     }
   };
 
-  const generateNextProductID = () => {
-    if (products.length === 0) return "CP001";
-
-    const ids = products
-      .map((p) => p.productID)
-      .filter(
-        (id) =>
-          typeof id === "string" &&
-          id.startsWith("CP") &&
-          /^\d{3}$/.test(id.slice(2))
-      )
-      .map((id) => parseInt(id.slice(2), 10));
-
-    if (ids.length === 0) return "CP001";
-
-    const maxNumber = Math.max(...ids);
-    const nextNumber = maxNumber + 1;
-    return "CP" + nextNumber.toString().padStart(3, "0");
-  };
-
   const formatDelivery = (delivery) => {
     if (!delivery) return "";
     return delivery.endsWith(" Days") ? delivery : delivery + " Days";
@@ -178,7 +156,6 @@ const Products = () => {
     }
 
     try {
-      const newProductID = generateNextProductID();
       const stockData = initializeFullStock(newProduct.stock);
       const totalStock = Object.values(stockData).reduce(
         (sum, val) => sum + val,
@@ -186,7 +163,6 @@ const Products = () => {
       );
 
       await addDoc(collection(db, "sellerRequest"), {
-        productID: newProductID,
         productName: newProduct.name,
         price: Number(newProduct.price),
         delivery: formatDelivery(newProduct.delivery),
@@ -198,7 +174,7 @@ const Products = () => {
         categorySub: newProductCategory.sub,
         sizes: SIZE_OPTIONS,
         totalStock: totalStock,
-        imageUrl: newProduct.imageUrl || "/asset/icon.png", // save image
+        imageUrl: newProduct.imageUrl || "/asset/icon.png",
         arUrl: newProduct.arUrl,
         createdAt: serverTimestamp(),
         editedAt: null,
@@ -282,7 +258,6 @@ const Products = () => {
       if (originalData.categorySub !== editProduct.categorySub)
         changes.push("Sub Category");
 
-      // Fetch current role dynamically
       let currentRole = "Seller";
       try {
         const querySnapshot = await getDocs(collection(db, "seller"));
@@ -294,7 +269,6 @@ const Products = () => {
         console.error("Error fetching role for log:", err);
       }
 
-      // Then log using currentRole
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email || "Unknown user",
@@ -316,7 +290,6 @@ const Products = () => {
 
   const confirmDelete = async () => {
     try {
-      // 1. Get the full product data before removing
       const productRef = doc(db, "products", deleteConfirm.id);
       const productSnap = await getDoc(productRef);
 
@@ -327,7 +300,6 @@ const Products = () => {
 
       const productData = productSnap.data();
 
-      // 2. Move product to removedProducts collection (save EVERYTHING)
       await addDoc(collection(db, "removedProducts"), {
         ...productData,
         originalId: deleteConfirm.id,
@@ -336,15 +308,12 @@ const Products = () => {
         role: role ?? "Unknown role",
       });
 
-      // 3. Remove from products collection
       await deleteDoc(productRef);
 
-      // 4. Update local state
       setProducts((prev) =>
         prev.filter((product) => product.id !== deleteConfirm.id)
       );
 
-      // Determine current role dynamically
       let currentRole = "Unknown role";
       try {
         const querySnapshot = await getDocs(collection(db, "seller"));
@@ -356,7 +325,6 @@ const Products = () => {
         console.error("Error fetching role for log:", err);
       }
 
-      // Log the activity
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: user?.email ?? "Unknown user",
@@ -367,7 +335,6 @@ const Products = () => {
         timestamp: serverTimestamp(),
       });
 
-      // 6. Reset states
       setDeleteConfirm({ show: false, id: null });
       setProductToDelete(null);
     } catch (error) {
@@ -473,53 +440,53 @@ const Products = () => {
           color: #555;
         }
       `}</style>
-
       <div className="product-grid">
-        {products.map((product) => (
-          <div key={product.id} className="product-card">
-            <img
-              src={product.imageUrl || "/asset/icon.png"}
-              alt={product.productName}
-            />
+        {[...products]
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map((product) => (
+            <div key={product.id} className="product-card">
+              <img
+                src={product.imageUrl || "/asset/icon.png"}
+                alt={product.productName}
+              />
+              <h3>
+                {product.productID
+                  ? `${product.productID} - ${product.productName}`
+                  : product.productName}
+              </h3>
+              <p>₱{product.price}</p>
+              <p>⭐ {product.rating}</p>
+              <p>Sold: {formatNumber(product.sold)}</p>
+              <p>Delivery: {product.delivery}</p>
 
-            <h3>
-              {product.productID
-                ? `${product.productID} - ${product.productName}`
-                : product.productName}
-            </h3>
-            <p>₱{product.price}</p>
-            <p>⭐ {product.rating}</p>
-            <p>Sold: {formatNumber(product.sold)}</p>
-            <p>Delivery: {product.delivery}</p>
+              <div>
+                <Label>Sizes</Label>
+                <p className="sizes-pill">{getSizesInStock(product.stock)}</p>
+              </div>
 
-            <div>
-              <Label>Sizes</Label>
-              <p className="sizes-pill">{getSizesInStock(product.stock)}</p>
+              <div className="actions-row">
+                <button
+                  onClick={() => {
+                    setEditProduct(product);
+                    setOriginalData(product);
+                  }}
+                  className="edit-button"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => {
+                    setProductToDelete(product);
+                    setDeleteConfirm({ show: true, id: product.id });
+                  }}
+                  className="delete-button"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
-
-            <div className="actions-row">
-              <button
-                onClick={() => {
-                  setEditProduct(product);
-                  setOriginalData(product);
-                }}
-                className="edit-button"
-              >
-                Edit
-              </button>
-
-              <button
-                onClick={() => {
-                  setProductToDelete(product);
-                  setDeleteConfirm({ show: true, id: product.id });
-                }}
-                className="delete-button"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          ))}
 
         <div onClick={() => setAddProduct(true)} className="add-card">
           + Add Product
@@ -531,8 +498,8 @@ const Products = () => {
               onClick={(e) => e.stopPropagation()}
               style={{
                 maxWidth: "95vw",
-                width: "1400px", // wider
-                maxHeight: "90vh", // taller
+                width: "1400px",
+                maxHeight: "90vh",
                 overflowY: "auto",
                 padding: "2rem",
                 display: "grid",
@@ -559,7 +526,7 @@ const Products = () => {
                   <SaveButton
                     onClick={() => setShowArModal(true)}
                     style={{
-                      backgroundColor: newProduct.arUrl ? "#6a2edb" : "#8a4fff", // darker if selected
+                      backgroundColor: newProduct.arUrl ? "#6a2edb" : "#8a4fff",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -704,8 +671,8 @@ const Products = () => {
                     style={{
                       marginTop: "5px",
                       borderCollapse: "collapse",
-                      width: "100%", // full width
-                      tableLayout: "fixed", // uniform column widths
+                      width: "100%",
+                      tableLayout: "fixed",
                       background: "#fff",
                       color: "#000",
                     }}
@@ -830,7 +797,7 @@ const Products = () => {
                     marginTop: "2rem",
                     display: "flex",
                     justifyContent: "center",
-                    gap: "4rem", // space between buttons
+                    gap: "4rem",
                   }}
                 >
                   <SaveButton onClick={handleAddProduct}>Request</SaveButton>
@@ -863,8 +830,8 @@ const Products = () => {
               onClick={(e) => e.stopPropagation()}
               style={{
                 maxWidth: "95vw",
-                width: "1400px", // wider
-                maxHeight: "90vh", // taller
+                width: "1400px",
+                maxHeight: "90vh",
                 overflowY: "auto",
                 padding: "2rem",
                 display: "grid",
@@ -1011,8 +978,8 @@ const Products = () => {
                     style={{
                       marginTop: "5px",
                       borderCollapse: "collapse",
-                      width: "100%", // full width
-                      tableLayout: "fixed", // uniform column widths
+                      width: "100%",
+                      tableLayout: "fixed",
                       background: "#fff",
                       color: "#000",
                     }}
@@ -1138,7 +1105,7 @@ const Products = () => {
                     marginTop: "2rem",
                     display: "flex",
                     justifyContent: "center",
-                    gap: "4rem", // space between buttons
+                    gap: "4rem",
                   }}
                 >
                   <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
@@ -1197,7 +1164,7 @@ const Products = () => {
               }}
             >
               <h3 style={{ marginBottom: "1rem", color: "#8a4fff" }}>
-                Select AR Product
+                Available AR Experience
               </h3>
               {arProducts.length === 0 && (
                 <p style={{ color: "#333" }}>No available AR products.</p>
@@ -1210,75 +1177,92 @@ const Products = () => {
                   marginTop: "1rem",
                 }}
               >
-                {arProducts.map((ar) => (
-                  <div
-                    key={ar.id}
-                    style={{
-                      border: "1px solid #8a4fff",
-                      borderRadius: "8px",
-                      padding: "0.5rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      backgroundColor: "#fff",
-                      textAlign: "center",
-                      transition: "transform 0.2s",
-                      position: "relative", // needed for check icon
-                    }}
-                    onClick={() => selectArProduct(ar)}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.transform = "scale(1.03)")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.transform = "scale(1)")
-                    }
-                  >
-                    {/* Green check if selected */}
-                    {newProduct.arUrl === ar.arUrl && (
+                {arProducts.map((ar) => {
+                  const isInUse = products.some((p) => p.arUrl === ar.arUrl);
+
+                  return (
+                    <div
+                      key={ar.id}
+                      style={{
+                        border: "1px solid #8a4fff",
+                        borderRadius: "8px",
+                        padding: "0.5rem",
+                        cursor: isInUse ? "not-allowed" : "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        backgroundColor: "#fff",
+                        textAlign: "center",
+                        transition: "transform 0.2s",
+                        position: "relative",
+                      }}
+                      onClick={() => !isInUse && selectArProduct(ar)}
+                      onMouseEnter={(e) =>
+                        !isInUse &&
+                        (e.currentTarget.style.transform = "scale(1.03)")
+                      }
+                      onMouseLeave={(e) =>
+                        !isInUse &&
+                        (e.currentTarget.style.transform = "scale(1)")
+                      }
+                    >
                       <div
                         style={{
-                          position: "absolute",
-                          top: "8px",
-                          left: "8px",
-                          backgroundColor: "#4caf50",
-                          borderRadius: "50%",
-                          width: "20px",
-                          height: "20px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontSize: "14px",
-                          fontWeight: "bold",
+                          filter: isInUse ? "blur(2px)" : "none",
+                          pointerEvents: isInUse ? "none" : "auto",
                         }}
                       >
-                        ✓
-                      </div>
-                    )}
+                        {newProduct.arUrl === ar.arUrl && !isInUse && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "8px",
+                              left: "8px",
+                              backgroundColor: "#4caf50",
+                              borderRadius: "50%",
+                              width: "20px",
+                              height: "20px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#fff",
+                              fontSize: "14px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            ✓
+                          </div>
+                        )}
 
-                    <img
-                      src={ar.imageUrl}
-                      alt="AR Preview"
-                      style={{
-                        width: "100%",
-                        maxHeight: "150px",
-                        objectFit: "contain",
-                        borderRadius: "4px",
-                      }}
-                    />
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        marginTop: "0.5rem",
-                        wordBreak: "break-word",
-                        color: "#333",
-                      }}
-                    >
-                      {ar.arUrl}
-                    </p>
-                  </div>
-                ))}
+                        <img
+                          src={ar.imageUrl}
+                          alt="AR Preview"
+                          style={{
+                            width: "100%",
+                            maxHeight: "150px",
+                            objectFit: "contain",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      </div>
+
+                      <p
+                        style={{
+                          fontSize: isInUse ? "16px" : "12px",
+                          marginTop: "0.5rem",
+                          wordBreak: "break-word",
+                          color: isInUse ? "red" : "#333",
+                          fontWeight: isInUse ? "bold" : "normal",
+                          fontStyle: isInUse ? "italic" : "normal",
+                          position: isInUse ? "relative" : "static",
+                          zIndex: isInUse ? 1 : "auto",
+                        }}
+                      >
+                        {isInUse ? "In Use" : ar.arUrl}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
               <CancelButton
                 onClick={() => setShowArModal(false)}
@@ -1297,6 +1281,7 @@ const Products = () => {
             </ModalContent>
           </ModalOverlay>
         )}
+
         {showPendingModal && (
           <ModalOverlay
             onClick={() => setShowPendingModal(false)}
@@ -1314,11 +1299,11 @@ const Products = () => {
               }}
             >
               <h3 style={{ marginBottom: "1rem", color: "#8a4fff" }}>
-                Product Pending Approval
+                Pending Product Review
               </h3>
               <p>
                 Your product <strong>{pendingProductName}</strong> has been
-                submitted and is waiting for admin approval.
+                submitted and is waiting for admin review.
               </p>
               <SaveButton
                 style={{ marginTop: "1.5rem" }}

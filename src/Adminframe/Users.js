@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from "react";
-import styled from "styled-components";
 import {
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  where,
   addDoc,
   collection,
+  doc,
+  getDocs,
+  onSnapshot,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
   writeBatch,
-  onSnapshot,
 } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import styled from "styled-components";
 import { db } from "../firebase";
 
 const Colors = {
@@ -25,7 +24,6 @@ const Colors = {
   green: "#4CAF70",
 };
 
-// Styled Components
 const Container = styled.div`
   padding: 30px;
   font-family: "Poppins", sans-serif;
@@ -55,12 +53,12 @@ const CounterText = styled.span`
   font-size: 1.1rem;
   color: Black;
   font-weight: 500;
-  padding-right: 20px; /* adjust value as needed */
+  padding-right: 20px;
 `;
 
 const NavButton = styled.button`
   margin-right: 10px;
-  padding: 12px 24px; /* bigger height & width */
+  padding: 12px 24px;
   border: none;
   border-radius: 30px;
   cursor: pointer;
@@ -70,10 +68,9 @@ const NavButton = styled.button`
       : Colors.secondary};
   color: ${Colors.white};
   font-weight: 600;
-  font-size: 1.2rem; /* increase font size */
+  font-size: 1.2rem;
   transition: all 0.2s ease;
 
-  /* Pressed/Clicked effect */
   ${(props) =>
     props.active &&
     `
@@ -95,8 +92,8 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  table-layout: fixed; /* <-- Add this */
-  word-wrap: break-word; /* optional, wrap long text */
+  table-layout: fixed;
+  word-wrap: break-word;
 `;
 
 const Th = styled.th`
@@ -161,9 +158,9 @@ const Td = styled.td`
 
 const StatusBadge = styled.span`
   display: inline-block;
-  width: 80px; /* constant width */
-  text-align: center; /* center the text */
-  padding: 4px 0; /* vertical padding only */
+  width: 80px;
+  text-align: center;
+  padding: 4px 0;
   border-radius: 20px;
   background-color: ${(props) =>
     props.status === "Active" ? Colors.green : Colors.red};
@@ -183,8 +180,8 @@ const ActionButton = styled.button`
   color: #fff;
   transition: all 0.2s ease;
 
-  width: 80px; /* fixed width so Block/Unblock are same size */
-  text-align: center; /* center text inside the button */
+  width: 80px;
+  text-align: center;
 
   background-color: ${(props) =>
     props.type === "block"
@@ -262,12 +259,12 @@ const LoaderOverlay = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5); // semi-transparent
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
-  align-items: flex-start; // move content toward top
-  padding-top: 20%; // adjust this value to move it higher or lower
-  z-index: 2000; // higher than your modal
+  align-items: flex-start;
+  padding-top: 20%;
+  z-index: 2000;
   color: #fff;
   font-size: 1.5rem;
   font-weight: 600;
@@ -278,23 +275,21 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalAction, setModalAction] = useState(null); // "block" or "remove"
+  const [modalAction, setModalAction] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [blockStatusPending, setBlockStatusPending] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Reference to the users collection
     const usersRef = collection(db, "users");
 
-    // Real-time listener
     const unsubscribe = onSnapshot(
       usersRef,
       (snapshot) => {
         const usersList = snapshot.docs.map((doc) => {
           const data = doc.data();
           return {
-            docId: doc.id, // Firestore doc ID
+            docId: doc.id,
             id: data.userId || doc.id,
             name: data.name?.trim() || "N/A",
             username: data.username?.trim() || "N/A",
@@ -304,7 +299,6 @@ const Users = () => {
           };
         });
 
-        // Sort users by user ID
         usersList.sort((a, b) => {
           const numA = parseInt(a.id.replace(/^U0*/, ""), 10);
           const numB = parseInt(b.id.replace(/^U0*/, ""), 10);
@@ -320,7 +314,6 @@ const Users = () => {
       }
     );
 
-    // Cleanup listener on unmount
     return () => unsubscribe();
   }, []);
 
@@ -345,7 +338,6 @@ const Users = () => {
         prev.map((u) => (u.id === userId ? { ...u, blockStatus: block } : u))
       );
 
-      // Log the admin action
       const actionDescription = block
         ? `User ${userId} is blocked`
         : `User ${userId} is unblocked`;
@@ -358,9 +350,8 @@ const Users = () => {
 
   const handleRemove = async (userId) => {
     try {
-      const batch = writeBatch(db); // Initialize batch
+      const batch = writeBatch(db);
 
-      // 1️⃣ Get user main doc
       const usersSnapshot = await getDocs(collection(db, "users"));
       const userDoc = usersSnapshot.docs.find(
         (doc) => doc.data().userId === userId
@@ -368,7 +359,6 @@ const Users = () => {
       if (!userDoc) return;
       const userData = userDoc.data();
 
-      // 2️⃣ Define collections and their archive counterparts
       const collectionsMap = {
         users: "usersArchive",
         shippingLocations: "shippingLocationsArchive",
@@ -384,12 +374,10 @@ const Users = () => {
         toShip: "toshipArchive",
       };
 
-      // 3️⃣ Archive the main user data
       const userArchiveRef = doc(collection(db, collectionsMap["users"]));
       batch.set(userArchiveRef, { ...userData, archivedAt: serverTimestamp() });
       batch.delete(doc(db, "users", userDoc.id));
 
-      // 4️⃣ Archive other collections
       for (const [col, archiveCol] of Object.entries(collectionsMap)) {
         if (col === "users") continue;
 
@@ -406,10 +394,8 @@ const Users = () => {
         });
       }
 
-      // 5️⃣ Commit batch
       await batch.commit();
 
-      // 6️⃣ Update local state
       setUsers((prev) => prev.filter((u) => u.userId !== userId));
 
       await logAdminAction({
@@ -425,11 +411,8 @@ const Users = () => {
 
   const logAdminAction = async ({ actionDescription, userIdAffected }) => {
     try {
-      // Get current admin info (assuming you have admins collection and user is logged in)
       const adminSnapshot = await getDocs(collection(db, "admins"));
 
-      // Assuming you can find the current admin by email/auth
-      // For simplicity, we’ll take the first one (replace with your auth logic)
       const currentAdminDoc = adminSnapshot.docs[0];
       if (!currentAdminDoc) return;
 
@@ -437,7 +420,6 @@ const Users = () => {
       const adminEmail = adminData.email || "unknown";
       const adminRole = adminData.role || "Admin";
 
-      // Generate unique log ID (like LOG-1764314491546-610)
       const logId =
         "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
 
@@ -568,7 +550,7 @@ const Users = () => {
             <ModalButtons>
               <ConfirmButton
                 onClick={async () => {
-                  if (saving) return; // prevent double clicks
+                  if (saving) return;
                   setSaving(true);
 
                   try {
@@ -588,14 +570,14 @@ const Users = () => {
                     setSelectedUser(null);
                   }
                 }}
-                disabled={saving} // disable while saving
+                disabled={saving}
               >
                 {saving ? "Saving..." : "Yes"}
               </ConfirmButton>
 
               <CancelButton
                 onClick={() => {
-                  if (saving) return; // prevent closing while saving
+                  if (saving) return;
                   setModalOpen(false);
                   setSelectedUser(null);
                 }}

@@ -1,29 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   Navigate,
+  Outlet,
   Route,
   BrowserRouter as Router,
   Routes,
-  Outlet,
-  useNavigate,
 } from "react-router-dom";
-import "./App.css";
-import Sidebar from "./components/Sidebar";
-import AdminSidebar from "./components/AdminSidebar";
-import ChatSupport from "./frame/ChatSupport";
-import Logout from "./frame/Logout";
-import Products from "./frame/Products";
-import Reviews from "./frame/Reviews";
-import SellerLogin from "./frame/SellerLogin";
-import SellerDashboard from "./frame/SellerDashboard";
-import SplashScreen from "./frame/SplashScreen";
-import Cancelled from "./frame/Cancelled";
-import Complete from "./frame/Complete";
-import Orders from "./frame/Orders";
-import RoleSelection from "./frame/RoleSelection";
-import ToReceive from "./frame/ToReceive";
-import Return_Refund from "./frame/Return_Refund";
-import ToShip from "./frame/ToShip";
 import ActivityLogs from "./Adminframe/ActivityLogs";
 import Admin from "./Adminframe/Admin";
 import AdminDashboard from "./Adminframe/AdminDashboard";
@@ -32,10 +14,27 @@ import AdminLogout from "./Adminframe/AdminLogout";
 import Archives from "./Adminframe/Archives";
 import Seller from "./Adminframe/Seller";
 import Users from "./Adminframe/Users";
+import "./App.css";
+import AdminSidebar from "./components/AdminSidebar";
+import Sidebar from "./components/Sidebar";
+import Cancelled from "./frame/Cancelled";
+import ChatSupport from "./frame/ChatSupport";
+import Complete from "./frame/Complete";
+import Logout from "./frame/Logout";
+import Orders from "./frame/Orders";
+import Products from "./frame/Products";
+import Return_Refund from "./frame/Return_Refund";
+import Reviews from "./frame/Reviews";
+import RoleSelection from "./frame/RoleSelection";
+import SellerDashboard from "./frame/SellerDashboard";
+import SellerLogin from "./frame/SellerLogin";
+import SplashScreen from "./frame/SplashScreen";
+import ToReceive from "./frame/ToReceive";
+import ToShip from "./frame/ToShip";
 
 const SellerLayout = () => (
   <div style={{ display: "flex" }}>
-    <Sidebar /> {/* side nav */}
+    <Sidebar />
     <div style={{ marginLeft: "250px", padding: "20px", flex: 1 }}>
       <Outlet />
     </div>
@@ -44,7 +43,7 @@ const SellerLayout = () => (
 
 const AdminLayout = () => (
   <div style={{ display: "flex" }}>
-    <AdminSidebar /> {/* side nav */}
+    <AdminSidebar />
     <div style={{ marginLeft: "250px", flex: 1 }}>
       <Outlet />
     </div>
@@ -92,7 +91,6 @@ function App() {
           <Route path="adminlogout" element={<AdminLogout />} />
         </Route>
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

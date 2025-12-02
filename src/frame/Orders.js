@@ -1,34 +1,30 @@
-import React, { useState, useEffect } from "react";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { FiSearch } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
 import {
   OrdersContainer,
   OrdersHeader,
+  OrdersTable,
   OrdersTabs,
   TabItem,
-  OrdersTable,
-  TableHead,
-  TableRow,
-  TableHeader,
   TableData,
-  StatusButton,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "../components/orderstyle";
-import {
-  collection,
-  query,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  setDoc,
-  orderBy,
-  addDoc,
-  serverTimestamp,
-  getDocs,
-  getDoc,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { db, auth } from "../firebase";
-import { FiSearch } from "react-icons/fi";
+import { auth, db } from "../firebase";
 
 const popupStyles = {
   overlay: {
@@ -494,6 +490,9 @@ const Orders = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -543,6 +542,9 @@ const Orders = () => {
                 </TableData>
                 <TableData style={{ textAlign: "center" }}>
                   {item.productName}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {order.delivery}
                 </TableData>
                 <TableData style={{ textAlign: "center" }}>
                   {item.quantity}

@@ -1,23 +1,22 @@
-import React, { useEffect, useState } from "react";
-import styled from "styled-components";
-import { Pie } from "react-chartjs-2";
-import { FaCheckCircle, FaCog } from "react-icons/fa";
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import { ArcElement, Chart as ChartJS, Legend, Tooltip } from "chart.js";
 import {
   collection,
   getDocs,
-  onSnapshot,
-  query,
-  orderBy,
   limit,
+  onSnapshot,
+  orderBy,
+  query,
   where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { useEffect, useState } from "react";
+import { Pie } from "react-chartjs-2";
+import { FaCheckCircle, FaCog } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import styled from "styled-components";
+import { db } from "../firebase";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-/* -------------------- STYLED COMPONENTS -------------------- */
 const Container = styled.div`
   width: 100%;
   padding: 20px;
@@ -78,7 +77,6 @@ function formatTimestamp(ts) {
   return "Invalid timestamp";
 }
 
-/* -------------------- COMPONENT -------------------- */
 export default function AdminDashboard() {
   const [userCounts, setUserCounts] = useState({
     total: 0,
@@ -96,7 +94,7 @@ export default function AdminDashboard() {
     const unsub = onSnapshot(collection(db, "seller"), (snap) => {
       const sellerArr = snap.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data(), // expects fields: name, email
+        ...doc.data(),
       }));
       setSellers(sellerArr);
     });
@@ -157,10 +155,10 @@ export default function AdminDashboard() {
       });
 
       setUserCounts({
-        total: snap.size, // total users including blocked
-        active, // only unblocked active
-        inactive, // only unblocked inactive
-        blocked, // total blocked
+        total: snap.size,
+        active,
+        inactive,
+        blocked,
       });
     });
 
@@ -189,7 +187,6 @@ export default function AdminDashboard() {
   };
   const navigate = useNavigate();
 
-  /* -------------------- RENDER MAIN SCREEN -------------------- */
   const renderMainScreen = () => {
     switch (activeScreen) {
       case "users":
@@ -199,7 +196,7 @@ export default function AdminDashboard() {
             <div
               style={{
                 maxWidth: "600px",
-                margin: "40px auto 0 auto", // moves the chart down
+                margin: "40px auto 0 auto",
               }}
             >
               <Pie
@@ -211,17 +208,17 @@ export default function AdminDashboard() {
                     legend: {
                       position: "left",
                       labels: {
-                        boxWidth: 30, // bigger color box
+                        boxWidth: 30,
                         padding: 15,
                         font: {
-                          size: 16, // legend text size
+                          size: 16,
                         },
                       },
                     },
                   },
                 }}
-                height={350} // bigger pie
-                width={350} // bigger pie
+                height={350}
+                width={350}
               />
             </div>
           </>
@@ -302,14 +299,14 @@ export default function AdminDashboard() {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "flex-start", // push content slightly from top
+              justifyContent: "flex-start",
               height: "100%",
-              paddingTop: "80px", // move everything lower
+              paddingTop: "80px",
             }}
           >
             <FaCog
               style={{
-                fontSize: "140px", // bigger gear
+                fontSize: "140px",
                 color: "#6a5acd",
                 marginBottom: "25px",
               }}
@@ -319,12 +316,11 @@ export default function AdminDashboard() {
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
-                fontSize: "20px", // slightly bigger text
+                fontSize: "20px",
                 color: "#333",
               }}
             >
               <FaCheckCircle style={{ color: "green", fontSize: "24px" }} />{" "}
-              {/* bigger check */}
               <span>All systems running normally</span>
             </div>
           </div>
@@ -337,7 +333,6 @@ export default function AdminDashboard() {
 
   return (
     <Container>
-      {/* -------------------- TOP 4 CARDS -------------------- */}
       <CardRow>
         <SmallCard onClick={() => setActiveScreen("users")}>
           <CardLabel>Total Users</CardLabel>
@@ -372,7 +367,6 @@ export default function AdminDashboard() {
         </SmallCard>
       </CardRow>
 
-      {/* -------------------- MAIN SCREEN -------------------- */}
       <MainContent>{renderMainScreen()}</MainContent>
     </Container>
   );

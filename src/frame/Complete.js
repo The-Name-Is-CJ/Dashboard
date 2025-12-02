@@ -204,6 +204,9 @@ const Complete = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -230,6 +233,9 @@ const Complete = () => {
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
+                  </TableData>
+                  <TableData style={{ textAlign: "center" }}>
+                    {order.delivery}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.quantity}

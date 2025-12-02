@@ -28,7 +28,6 @@ const AdminLogout = () => {
       try {
         const querySnapshot = await getDocs(collection(db, "admins"));
         if (!querySnapshot.empty) {
-          // Find the current logged-in admin by email
           const currentUserEmail = auth.currentUser?.email
             ?.trim()
             .toLowerCase();

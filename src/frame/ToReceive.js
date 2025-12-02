@@ -1,13 +1,4 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
@@ -208,6 +199,9 @@ const ToReceive = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -234,6 +228,9 @@ const ToReceive = () => {
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
+                  </TableData>
+                  <TableData style={{ textAlign: "center" }}>
+                    {order.delivery}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.quantity}
