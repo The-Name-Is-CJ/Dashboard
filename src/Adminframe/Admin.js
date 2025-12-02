@@ -225,6 +225,7 @@ const Admin = () => {
         }) removed admin ${removedAdmin.email}`,
         timestamp: new Date().toISOString(),
         userEmail: admins[currentAdminId]?.email || "Unknown",
+        role: admins[currentAdminId]?.role || "Unknown",
       });
 
       alert(

@@ -140,27 +140,16 @@ const ActivityLogs = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "seller") return;
+    if (activeTab !== "admin") return;
 
-    const fetchSellerLogs = async () => {
+    const fetchAdminLogs = async () => {
       try {
-        // Get the single seller document
-        const sellersSnapshot = await getDocs(collection(db, "seller"));
-        if (sellersSnapshot.empty) {
-          console.error("No seller documents found");
-          setSellerLogs([]);
-          return;
-        }
+        const adminRoles = ["Main Admin", "Sub Admin", "Sub Admin 2"];
 
-        const sellerData = sellersSnapshot.docs[0].data();
-        const sellerEmail = sellerData.email?.toLowerCase(); // normalize to lowercase
-
-        console.log("Seller email:", sellerEmail);
-
-        // Query all recentActivityLogs that match the seller email
         const q = query(
           collection(db, "recentActivityLogs"),
-          where("userEmail", "==", sellerEmail)
+          where("role", "in", adminRoles),
+          orderBy("timestamp", "desc")
         );
 
         const logsSnapshot = await getDocs(q);
@@ -169,20 +158,19 @@ const ActivityLogs = () => {
           return {
             id: doc.id,
             ...data,
-            rewritten: rewriteSellerMessage(data), // uses data.action
+            // you can add rewritten here if needed
           };
         });
 
-        console.log("Fetched seller logs:", logs);
-
-        setSellerLogs(logs);
+        console.log("Fetched admin logs:", logs);
+        setAdminLogs(logs);
       } catch (err) {
-        console.error("Error fetching seller logs:", err);
-        setSellerLogs([]);
+        console.error("Error fetching admin logs:", err);
+        setAdminLogs([]);
       }
     };
 
-    fetchSellerLogs();
+    fetchAdminLogs();
   }, [activeTab]);
 
   useEffect(() => {

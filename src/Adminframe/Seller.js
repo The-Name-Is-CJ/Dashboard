@@ -20,13 +20,15 @@ import {
   SaveButton,
   CancelButton,
 } from "../components/dashboardstyles";
+import { FaUserCircle } from "react-icons/fa";
 
 const SIZE_OPTIONS = ["S", "M", "L", "XL"];
 const Colors = {
   secondary: "#fff",
   primary: "#6f42c1",
   accent: "#9b7bff",
-  white: "#000000ff",
+  white: "#ffffffff",
+  black: "#000000ff",
   gray: "#777",
 };
 
@@ -41,6 +43,8 @@ const Seller = () => {
   const [selectedSeller, setSelectedSeller] = useState(null);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
+  const [successModal, setSuccessModal] = useState(false);
+
   const subCategoryMap = {
     Top: ["T-Shirt", "Longsleeves"],
     Bottom: ["Pants", "Shorts"],
@@ -73,11 +77,49 @@ const Seller = () => {
 
   const handleSaveChange = async () => {
     if (!selectedSeller) return;
-    const sellerRef = doc(db, "seller", selectedSeller.id);
-    await updateDoc(sellerRef, { email: newEmail, name: newName });
-    fetchSellers();
-    setShowChangeModal(false);
-    setSelectedSeller(null);
+
+    try {
+      // 1️⃣ Update seller info
+      const sellerRef = doc(db, "seller", selectedSeller.id);
+      await updateDoc(sellerRef, { email: newEmail, name: newName });
+
+      // 2️⃣ Create activity log BEFORE showing success modal
+      let adminData = null;
+      try {
+        const adminSnap = await getDocs(collection(db, "admins"));
+        if (!adminSnap.empty) {
+          adminData = adminSnap.docs[0].data();
+        }
+      } catch (err) {
+        console.error("Error fetching admin info:", err);
+      }
+
+      const role = adminData?.role || "Admin";
+      const userEmail = adminData?.email || "Unknown admin";
+      const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      await addDoc(collection(db, "recentActivityLogs"), {
+        logID: logID,
+        action: `Updated seller ${newEmail} information`,
+        role: role,
+        userEmail: userEmail,
+        timestamp: serverTimestamp(),
+      });
+
+      setSuccessModal(true);
+      fetchSellers();
+
+      // 4️⃣ Close modal
+      setShowChangeModal(false);
+      setSelectedSeller(null);
+
+      setTimeout(() => {
+        setSuccessModal(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Error updating seller:", error);
+      alert("Failed to update seller info.");
+    }
   };
 
   // Open Remove Modal
@@ -88,15 +130,53 @@ const Seller = () => {
 
   const handleConfirmRemove = async () => {
     if (!selectedSeller) return;
-    await deleteDoc(doc(db, "seller", selectedSeller.id));
-    fetchSellers();
-    setShowRemoveModal(false);
-    setSelectedSeller(null);
-  };
 
-  useEffect(() => {
-    fetchSellers();
-  }, []);
+    try {
+      // 1️⃣ Move seller data to sellerArchive
+      const archiveRef = doc(db, "sellerArchive", selectedSeller.id);
+      await setDoc(archiveRef, {
+        ...selectedSeller,
+        archivedAt: serverTimestamp(),
+      });
+
+      // 2️⃣ Delete seller from original collection
+      await deleteDoc(doc(db, "seller", selectedSeller.id));
+
+      // 3️⃣ Fetch updated sellers
+      fetchSellers();
+
+      // 4️⃣ Create activity log
+      // Fetch admin info if needed
+      let adminData = null;
+      try {
+        const adminSnap = await getDocs(collection(db, "admins"));
+        if (!adminSnap.empty) {
+          adminData = adminSnap.docs[0].data();
+        }
+      } catch (err) {
+        console.error("Error fetching admin info:", err);
+      }
+
+      const role = adminData?.role || "Admin";
+      const userEmail = adminData?.email || "Unknown admin";
+      const logID = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      await addDoc(collection(db, "recentActivityLogs"), {
+        logID: logID,
+        action: `Removed seller ${selectedSeller.email}`,
+        role: role,
+        userEmail: userEmail,
+        timestamp: serverTimestamp(),
+      });
+
+      // 5️⃣ Close modal and reset state
+      setShowRemoveModal(false);
+      setSelectedSeller(null);
+    } catch (error) {
+      console.error("Error removing seller:", error);
+      alert("Failed to remove seller.");
+    }
+  };
 
   useEffect(() => {
     const fetchRequestProducts = async () => {
@@ -227,22 +307,63 @@ const Seller = () => {
   };
 
   return (
-    <div style={{ padding: "20px", color: Colors.white }}>
-      <h1 style={{ color: Colors.white }}>Seller Management</h1>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: "40px 20px",
+        fontFamily: "Arial, sans-serif",
+        background: "linear-gradient(135deg, #a349f7ff, #b8b3d7ff)",
+        color: Colors.white,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <h1
+        style={{
+          fontSize: "2.5rem",
+          marginBottom: "30px",
+          textAlign: "center",
+          fontWeight: "700",
+          textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+        }}
+      >
+        Seller Management
+      </h1>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: "20px", marginBottom: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "20px",
+          marginBottom: "30px",
+          justifyContent: "center",
+        }}
+      >
         <button
           onClick={() => setActiveTab("Sellers")}
           style={{
-            padding: "10px 20px",
+            padding: "14px 28px",
+            fontSize: "1.1rem",
             cursor: "pointer",
             backgroundColor:
-              activeTab === "Sellers" ? Colors.accent : Colors.secondary,
-            color: Colors.white,
+              activeTab === "Sellers" ? Colors.secondary : Colors.accent,
+            color: activeTab === "Sellers" ? Colors.black : Colors.white,
             border: "none",
-            borderRadius: "6px",
-            fontWeight: "600",
+            borderRadius: "8px",
+            fontWeight: "700",
+            transition: "all 0.2s ease-in-out",
+          }}
+          onMouseEnter={(e) => {
+            if (activeTab !== "Sellers") {
+              e.currentTarget.style.backgroundColor = "#b892ff"; // hover background
+              e.currentTarget.style.color = Colors.black; // hover text
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "Sellers") {
+              e.currentTarget.style.backgroundColor = Colors.accent; // original background
+              e.currentTarget.style.color = Colors.white; // original text
+            }
           }}
         >
           Sellers
@@ -251,22 +372,45 @@ const Seller = () => {
         <button
           onClick={() => setActiveTab("Requests")}
           style={{
-            padding: "10px 20px",
+            padding: "14px 28px",
+            fontSize: "1.1rem",
             cursor: "pointer",
             backgroundColor:
-              activeTab === "Requests" ? Colors.accent : Colors.secondary,
-            color: Colors.white,
+              activeTab === "Requests" ? Colors.secondary : Colors.accent,
+            color: activeTab === "Requests" ? Colors.black : Colors.white,
             border: "none",
-            borderRadius: "6px",
-            fontWeight: "600",
+            borderRadius: "8px",
+            fontWeight: "700",
+            transition: "all 0.2s ease-in-out",
+          }}
+          onMouseEnter={(e) => {
+            if (activeTab !== "Requests") {
+              e.currentTarget.style.backgroundColor = "#b892ff"; // hover background
+              e.currentTarget.style.color = Colors.black; // hover text
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "Requests") {
+              e.currentTarget.style.backgroundColor = Colors.accent; // original background
+              e.currentTarget.style.color = Colors.white; // original text
+            }
           }}
         >
-          Request for Permission
+          Product to Review
         </button>
       </div>
 
       {activeTab === "Sellers" && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "30px", // more gap
+            justifyContent: "center",
+            maxWidth: "1200px", // wider container
+            margin: "0 auto",
+          }}
+        >
           {sellers.length === 0 ? (
             <p style={{ color: Colors.gray }}>No sellers found.</p>
           ) : (
@@ -277,58 +421,121 @@ const Seller = () => {
                   border: `1px solid ${Colors.gray}`,
                   borderRadius: "10px",
                   padding: "20px",
-                  width: "500px",
+                  width: "550px",
+                  backdropFilter: "blur(8px)",
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
                   backgroundColor: Colors.secondary,
                   boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-                  color: Colors.white,
+                  color: Colors.black,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  transition: "transform 0.2s",
                 }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.transform = "scale(1.03)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.transform = "scale(1)")
+                }
               >
+                <FaUserCircle
+                  style={{
+                    fontSize: "100px", // bigger icon
+                    marginBottom: "20px", // more spacing below
+                    color: Colors.accent,
+                  }}
+                />
+
                 <h3 style={{ marginBottom: "10px", textAlign: "center" }}>
                   {seller.name}
                 </h3>
-                <p>
-                  <strong>Email:</strong> {seller.email}
-                </p>
-                <p>
-                  <strong>Role:</strong> {seller.role}
-                </p>
+                <div
+                  style={{
+                    width: "100%",
+                    backgroundColor: Colors.accent,
+                    padding: "10px 15px",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                    color: Colors.white,
+                    fontWeight: "500",
+                    marginBottom: "10px",
+                    textAlign: "left",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  Email: {seller.email}
+                </div>
+
+                <div
+                  style={{
+                    width: "100%",
+                    backgroundColor: Colors.accent,
+                    padding: "10px 15px",
+                    borderRadius: "8px",
+                    fontSize: "1rem",
+                    color: Colors.white,
+                    fontWeight: "500",
+                    marginBottom: "10px",
+                    textAlign: "left",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  Name: {seller.name}
+                </div>
 
                 <div
                   style={{
                     display: "flex",
-                    gap: "10px",
-                    marginTop: "15px",
+                    gap: "15px",
+                    marginTop: "20px",
                     justifyContent: "center",
                   }}
                 >
                   <button
                     style={{
-                      width: "110px",
-                      padding: "6px 8px",
+                      width: "140px",
+                      padding: "8px 12px",
                       backgroundColor: Colors.accent,
                       color: Colors.white,
                       border: "none",
-                      borderRadius: "6px",
+                      borderRadius: "8px",
                       cursor: "pointer",
                       fontWeight: "600",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                      transition: "all 0.2s",
                     }}
                     onClick={() => openChangeModal(seller)}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#b892ff")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = Colors.accent)
+                    }
                   >
                     Change Email/Name
                   </button>
 
                   <button
                     style={{
-                      width: "90px",
-                      padding: "6px 8px",
+                      width: "110px",
+                      padding: "8px 12px",
                       backgroundColor: "#b30021",
                       color: Colors.white,
                       border: "none",
-                      borderRadius: "6px",
+                      borderRadius: "8px",
                       cursor: "pointer",
                       fontWeight: "600",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                      transition: "all 0.2s",
                     }}
                     onClick={() => openRemoveModal(seller)}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#d10030")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#b30021")
+                    }
                   >
                     Remove
                   </button>
@@ -351,11 +558,28 @@ const Seller = () => {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  padding: "15px",
-                  borderRadius: "8px",
+                  padding: "25px",
+                  borderRadius: "10px", // match seller card
+                  backdropFilter: "blur(8px)", // glass effect
                   backgroundColor: Colors.secondary,
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)", // match seller card
                   color: Colors.black,
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                  fontSize: "1.05rem",
+                  width: "500px",
+                  maxWidth: "700px",
+                  margin: "0 auto", // center in container
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.03)";
+                  e.currentTarget.style.boxShadow =
+                    "0 10px 25px rgba(0,0,0,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 8px 20px rgba(0,0,0,0.3)";
                 }}
               >
                 <div>
@@ -712,13 +936,51 @@ const Seller = () => {
 
       {/* Remove Seller Modal */}
       {showRemoveModal && (
-        <ModalOverlay onClick={() => setShowRemoveModal(false)}>
-          <ModalContent onClick={(e) => e.stopPropagation()}>
-            <h2>Confirm Removal</h2>
-            <p>Are you sure you want to remove {selectedSeller?.email}?</p>
-            <div style={{ marginTop: "1rem", display: "flex", gap: "1rem" }}>
+        <ModalOverlay
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0,0,0,0.5)", // dim overlay
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowRemoveModal(false)}
+        >
+          <ModalContent
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "400px",
+              width: "90%",
+              padding: "20px", // equal padding
+              borderRadius: "12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              boxSizing: "border-box",
+              color: "#000", // black text
+              backgroundColor: "#fff",
+              boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
+            }}
+          >
+            <h2 style={{ margin: 0, textAlign: "center" }}>Confirm Removal</h2>
+            <p style={{ textAlign: "center" }}>
+              Are you sure you want to remove {selectedSeller?.email}?
+            </p>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "10px",
+                marginTop: "12px",
+              }}
+            >
               <SaveButton
-                style={{ backgroundColor: "#b30021" }}
+                style={{ backgroundColor: "#b30021", color: "#fff" }}
                 onClick={handleConfirmRemove}
               >
                 Remove
@@ -729,6 +991,40 @@ const Seller = () => {
             </div>
           </ModalContent>
         </ModalOverlay>
+      )}
+
+      {successModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0,0,0,0.5)", // semi-transparent overlay
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999, // ensure it’s on top
+            pointerEvents: "auto", // blocks interaction
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#4BB543", // green success
+              color: "#fff",
+              padding: "30px 50px",
+              borderRadius: "12px",
+              fontSize: "1.2rem",
+              fontWeight: "600",
+              textAlign: "center",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.3)",
+              pointerEvents: "none", // allow clicks to be blocked only on overlay
+            }}
+          >
+            Changes in seller account are successful!
+          </div>
+        </div>
       )}
     </div>
   );

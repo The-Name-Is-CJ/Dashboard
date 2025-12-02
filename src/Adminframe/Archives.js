@@ -31,7 +31,7 @@ const Colors = {
 // PAGE
 const PageContainer = styled.div`
   padding: 30px;
-  background: ${Colors.primary};
+  background: linear-gradient(135deg, #a349f7ff, #b8b3d7ff);
   min-height: 100vh;
   width: 100%;
   color: ${Colors.black};
@@ -277,6 +277,11 @@ const Archives = () => {
       console.log(
         `Deleted archived document ${archiveId} from ${archiveCollection}.`
       );
+
+      await logAdminAction({
+        actionDescription: `Restored document from ${archiveCollection} to ${originalCollection}`,
+        userIdAffected: archiveId,
+      });
 
       // Optional: remove it from local state immediately
       switch (archiveCollection) {
@@ -587,29 +592,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button (same as Users) */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => handleRestoreClick(item, activeTab)}
-                >
-                  <RestoreIcon />
-                  <span
-                    style={{
-                      marginTop: "4px",
-                      fontSize: "10px",
-                      fontWeight: "600",
-                      color: "black",
-                    }}
-                  >
-                    Restore
-                  </span>
-                </div>
-
                 {/* Timestamp Bottom Right (copied layout) */}
                 <div
                   style={{
@@ -661,29 +643,6 @@ const Archives = () => {
                       <FieldLabel>Role:</FieldLabel> {item.role || "Admin"}
                     </div>
                   </ItemInfo>
-
-                  {/* Restore Button (same as Users) */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => handleRestoreClick(item, activeTab)}
-                  >
-                    <RestoreIcon />
-                    <span
-                      style={{
-                        marginTop: "4px",
-                        fontSize: "10px",
-                        fontWeight: "600",
-                        color: "black",
-                      }}
-                    >
-                      Restore
-                    </span>
-                  </div>
 
                   {/* Timestamp Bottom Right (same as Users/Seller) */}
                   <div
