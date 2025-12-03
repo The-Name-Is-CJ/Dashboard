@@ -191,23 +191,25 @@ const Seller = () => {
     return value ? value.toString().trim() : "";
   };
 
-  const generateNextProductID = () => {
-    if (requestProducts.length === 0) return "CP001";
+  const generateNextProductID = async () => {
+    try {
+      const productsSnapshot = await getDocs(collection(db, "products"));
+      const ids = productsSnapshot.docs
+        .map((doc) => doc.data().productID)
+        .filter(
+          (id) =>
+            typeof id === "string" &&
+            id.startsWith("CP") &&
+            /^\d{3,}$/.test(id.slice(2)) // allow 3 or more digits
+        )
+        .map((id) => parseInt(id.slice(2), 10));
 
-    const ids = requestProducts
-      .map((p) => p.productID)
-      .filter(
-        (id) =>
-          typeof id === "string" &&
-          id.startsWith("CP") &&
-          /^\d{3}$/.test(id.slice(2))
-      )
-      .map((id) => parseInt(id.slice(2), 10));
-
-    if (ids.length === 0) return "CP001";
-
-    const nextNumber = Math.max(...ids) + 1;
-    return "CP" + nextNumber.toString().padStart(3, "0");
+      const nextNumber = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+      return "CP" + nextNumber.toString().padStart(3, "0");
+    } catch (err) {
+      console.error("Error generating next product ID:", err);
+      return "CP001"; // fallback
+    }
   };
 
   const handleModalClick = (e) => {
@@ -221,10 +223,11 @@ const Seller = () => {
 
   const handleSaveEdit = async () => {
     try {
-      const newProductID = generateNextProductID();
+      // Generate the next productID for the field only
+      const newProductID = await generateNextProductID();
 
-      const productRef = doc(db, "products", newProductID);
-      const requestRef = doc(db, "sellerRequest", editProduct.id);
+      // Use addDoc instead of setDoc to let Firestore create its own doc ID
+      const productRef = collection(db, "products");
 
       const updatedStock = initializeFullStock(editProduct.stock || {});
       const totalStock = Object.values(updatedStock).reduce(
@@ -232,8 +235,8 @@ const Seller = () => {
         0
       );
 
-      await setDoc(productRef, {
-        productID: newProductID,
+      await addDoc(productRef, {
+        productID: newProductID, // just the field
         productName: editProduct.productName,
         price: Number(editProduct.price),
         delivery: formatDelivery(editProduct.delivery),
@@ -249,6 +252,8 @@ const Seller = () => {
         editedAt: serverTimestamp(),
       });
 
+      // Delete the request after approving
+      const requestRef = doc(db, "sellerRequest", editProduct.id);
       await deleteDoc(requestRef);
 
       let adminEmail = "Unknown admin";

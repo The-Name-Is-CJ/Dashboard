@@ -43,10 +43,13 @@ const ReturnRefund = () => {
   const [orders, setOrders] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [weeklyReturnCount, setWeeklyReturnCount] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [statusAction, setStatusAction] = useState(null);
 
   useEffect(() => {
     const returnRef = collection(db, "return_refund");
-    const q = query(returnRef, orderBy("requestedAt", "desc"));
+    const q = query(returnRef, orderBy("requestDate", "asc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       try {
@@ -54,6 +57,7 @@ const ReturnRefund = () => {
           id: docSnap.id,
           ...docSnap.data(),
         }));
+
         setOrders(fetchedOrders);
       } catch (err) {
         console.error("Error fetching return/refund orders:", err);
@@ -80,8 +84,9 @@ const ReturnRefund = () => {
         if (!u.latestSnapshot) return;
         u.latestSnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.requestedAt) {
-            const date = data.requestedAt.toDate();
+          if (data.requestDate) {
+            const date = data.requestDate.toDate();
+
             if (date >= startOfWeek && date <= today) total += 1;
           }
         });
@@ -103,14 +108,12 @@ const ReturnRefund = () => {
     return () => unsubscribes.forEach((u) => u());
   }, []);
 
-  const filteredOrders = orders
-    .map((order) => ({
-      ...order,
-      items: order.items.filter((item) =>
-        order.orderId?.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    }))
-    .filter((order) => order.items.length > 0);
+  const filteredOrders =
+    searchTerm.trim() === ""
+      ? orders
+      : orders.filter((order) =>
+          order.toreceiveID?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
 
   const tabs = [
     { name: "Orders", path: "/seller/orders" },
@@ -120,6 +123,177 @@ const ReturnRefund = () => {
     { name: "Completed", path: "/seller/orders/complete" },
     { name: "Return/Refund", path: "/seller/orders/return_refund" },
   ];
+
+  const RefundModal = () => {
+    if (!modalOpen || !selectedOrder) return null;
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+        }}
+      >
+        <div
+          style={{
+            width: "550px",
+            background: "#fff",
+            padding: "25px",
+            borderRadius: "12px",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            animation: "fadeDown 0.2s ease",
+          }}
+        >
+          <h2 style={{ marginBottom: "10px" }}>Refund Request Details</h2>
+
+          <img
+            src={selectedOrder.imageUrl}
+            alt="Product"
+            style={{
+              width: "140px",
+              height: "140px",
+              objectFit: "cover",
+              borderRadius: "10px",
+              marginBottom: "15px",
+              border: "1px solid #ddd",
+            }}
+          />
+
+          <div style={{ marginBottom: "15px", lineHeight: "1.6" }}>
+            <p>
+              <strong>Customer:</strong> {selectedOrder.name}
+            </p>
+            <p>
+              <strong>Contact:</strong> {selectedOrder.contact}
+            </p>
+            <p>
+              <strong>Address:</strong> {selectedOrder.street},{" "}
+              {selectedOrder.barangay}, {selectedOrder.municipality},{" "}
+              {selectedOrder.province || ""}
+            </p>
+            <p>
+              <strong>Product:</strong> {selectedOrder.productName}
+            </p>
+            <p>
+              <strong>Size:</strong> {selectedOrder.size}
+            </p>
+            <p>
+              <strong>Quantity:</strong> {selectedOrder.quantity}
+            </p>
+            <p>
+              <strong>Price:</strong> ₱{selectedOrder.price}
+            </p>
+            <p>
+              <strong>Refund Amount:</strong> ₱{selectedOrder.refund}
+            </p>
+            <p>
+              <strong>Reason:</strong> {selectedOrder.reason}
+            </p>
+            <p>
+              <strong>Description:</strong> {selectedOrder.description}
+            </p>
+            <p>
+              <strong>Return Method:</strong> {selectedOrder.returnMethod}
+            </p>
+            <p>
+              <strong>Requested At:</strong>{" "}
+              {selectedOrder.requestDate?.toDate().toLocaleString()}
+            </p>
+          </div>
+
+          {/* ACTION BUTTONS */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              marginTop: "25px",
+            }}
+          >
+            <button
+              onClick={() => {
+                setOrders((prev) =>
+                  prev.map((o) =>
+                    o.id === selectedOrder.id ? { ...o, status: "refunded" } : o
+                  )
+                );
+                setModalOpen(false);
+                setSelectedOrder(null);
+              }}
+              style={{
+                backgroundColor: "#28a745",
+                color: "#fff",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: "bold",
+                flex: 1,
+                marginRight: "10px",
+              }}
+            >
+              Refund
+            </button>
+
+            <button
+              onClick={() => {
+                setOrders((prev) =>
+                  prev.map((o) =>
+                    o.id === selectedOrder.id
+                      ? { ...o, status: "disapproved" }
+                      : o
+                  )
+                );
+                setModalOpen(false);
+                setSelectedOrder(null);
+              }}
+              style={{
+                backgroundColor: "#dc3545",
+                color: "#fff",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                fontWeight: "bold",
+                flex: 1,
+              }}
+            >
+              Disapprove
+            </button>
+          </div>
+
+          {/* CLOSE BUTTON */}
+          <button
+            onClick={() => {
+              setModalOpen(false);
+              setSelectedOrder(null);
+              setStatusAction(null);
+            }}
+            style={{
+              marginTop: "15px",
+              width: "100%",
+              padding: "10px",
+              backgroundColor: "#777",
+              color: "#fff",
+              borderRadius: "8px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "500",
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <OrdersContainer>
@@ -218,54 +392,77 @@ const ReturnRefund = () => {
         </TableHead>
         <tbody>
           {filteredOrders.length > 0 ? (
-            filteredOrders.flatMap((order) =>
-              order.items.map((item) => (
-                <TableRow key={`${order.id}-${item.id}`}>
-                  <TableData>{order.name || order.userId}</TableData>
-                  <TableData>{order.address || "-"}</TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {order.requestedAt?.toDate().toLocaleString() || "-"}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.productName}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {order.delivery}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.quantity}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    ₱{item.price}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {item.size || "-"}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    <button
-                      style={{
-                        backgroundColor: "#dc3545",
-                        color: "#fff",
-                        padding: "4px 10px",
-                        borderRadius: "6px",
-                        fontWeight: "bold",
-                        fontSize: "0.9rem",
-                        display: "inline-block",
-                        border: "none",
-                        cursor: "default",
-                      }}
-                      disabled
-                    >
-                      Return/Refund
-                    </button>
-                  </TableData>
-                </TableRow>
-              ))
-            )
+            filteredOrders.map((order) => (
+              <TableRow key={order.id}>
+                <TableData>{order.name || order.userId}</TableData>
+                <TableData>
+                  {order.address ||
+                    `${order.street}, ${order.barangay}, ${
+                      order.municipality
+                    }, ${order.province || ""}`}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  {order.requestDate?.toDate().toLocaleString() || "-"}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  {order.productName}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  {order.delivery}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  {order.quantity}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  ₱{order.price}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  {order.size || "-"}
+                </TableData>
+
+                <TableData style={{ textAlign: "center" }}>
+                  <button
+                    onClick={() => {
+                      if (!order.status) {
+                        setSelectedOrder(order);
+                        setModalOpen(true);
+                      }
+                    }}
+                    style={{
+                      backgroundColor:
+                        order.status === "refunded"
+                          ? "green"
+                          : order.status === "disapproved"
+                          ? "red"
+                          : "#9747FF",
+                      color: "#fff",
+                      padding: "6px 14px",
+                      borderRadius: "6px",
+                      border: "none",
+                      fontWeight: "bold",
+                      cursor: order.status ? "default" : "pointer",
+                    }}
+                    disabled={!!order.status}
+                  >
+                    {order.status === "refunded"
+                      ? "Refunded"
+                      : order.status === "disapproved"
+                      ? "Disapproved"
+                      : "View"}
+                  </button>
+                </TableData>
+              </TableRow>
+            ))
           ) : (
             <TableRow>
               <TableData
-                colSpan="8"
+                colSpan="9"
                 style={{ textAlign: "center", padding: "20px" }}
               >
                 ✅ No return/refund requests found
@@ -274,6 +471,12 @@ const ReturnRefund = () => {
           )}
         </tbody>
       </OrdersTable>
+      {modalOpen && (
+        <RefundModal
+          order={selectedOrder}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </OrdersContainer>
   );
 };

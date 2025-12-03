@@ -177,23 +177,24 @@ const Admin = () => {
       };
       const removeId = generateRemoveId();
 
+      // Get the admin logs
       const logsQuery = query(
         collection(db, "recentActivityLogs"),
         where("userEmail", "==", adminEmail)
       );
-
       const logsSnapshot = await getDocs(logsQuery);
       const adminLogs = logsSnapshot.docs.map((doc) => doc.data());
 
+      // Archive admin info (without logs)
       await addDoc(collection(db, "adminArchive"), {
         removeId,
         name: removedAdmin.name,
         email: removedAdmin.email,
         archiveFrom: docId,
-        archivedAt: new Date().toISOString(),
-        recentActivityLogs: adminLogs,
+        archivedAt: new Date(),
       });
 
+      // Remove admin info
       const docRef = doc(db, "admins", docId);
       await updateDoc(docRef, { name: "", email: "" });
 
@@ -202,18 +203,27 @@ const Admin = () => {
         [docId]: { name: "", email: "" },
       }));
 
+      // Add logs to recentActivityLogs collection
+      for (const log of adminLogs) {
+        await addDoc(collection(db, "recentActivityLogs"), {
+          ...log,
+          archivedAdminRemoveId: removeId, // optional: track which admin removal this belongs to
+        });
+      }
+
+      // Add action log for this removal
       const currentAdminId = Object.keys(admins).find(
         (key) => admins[key].email === auth.currentUser?.email
       );
-
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
         action: `Admin (${
           admins[currentAdminId]?.email || "Unknown"
         }) removed admin ${removedAdmin.email}`,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(),
         userEmail: admins[currentAdminId]?.email || "Unknown",
         role: admins[currentAdminId]?.role || "Unknown",
+        archivedAdminRemoveId: removeId,
       });
 
       alert(

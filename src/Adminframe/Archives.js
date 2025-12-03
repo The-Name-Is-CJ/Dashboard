@@ -8,6 +8,7 @@ import {
   serverTimestamp,
   where,
   writeBatch,
+  setDoc,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FaUser } from "react-icons/fa";
@@ -256,7 +257,14 @@ const Archives = () => {
         return;
       }
 
-      await addDoc(collection(db, originalCollection), archivedData);
+      const originalDocId = archivedData.originalDocId || archivedData.userId;
+
+      const restoredData = { ...archivedData };
+      delete restoredData.archivedAt;
+      delete restoredData.originalDocId;
+
+      await setDoc(doc(db, originalCollection, originalDocId), restoredData);
+
       console.log(
         `Restored document from ${archiveCollection} to ${originalCollection}.`
       );
@@ -345,8 +353,17 @@ const Archives = () => {
       if (!userDoc) return console.error("Archived user not found.");
 
       const userData = userDoc.data();
-      const userRef = doc(collection(db, "users"));
-      batch.set(userRef, userData);
+      const userRef = doc(
+        db,
+        "users",
+        userData.originalDocId || userData.userId
+      );
+      const restoredUserData = { ...userData };
+      delete restoredUserData.archivedAt;
+      delete restoredUserData.originalDocId;
+
+      batch.set(userRef, restoredUserData);
+
       batch.delete(doc(db, "usersArchive", userDoc.id));
 
       for (const [archiveCol, originalCol] of Object.entries(collectionsMap)) {

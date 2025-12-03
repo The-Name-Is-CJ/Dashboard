@@ -375,7 +375,11 @@ const Users = () => {
       };
 
       const userArchiveRef = doc(collection(db, collectionsMap["users"]));
-      batch.set(userArchiveRef, { ...userData, archivedAt: serverTimestamp() });
+      batch.set(userArchiveRef, {
+        ...userData,
+        originalDocId: userDoc.id, // <-- save this
+        archivedAt: serverTimestamp(),
+      });
       batch.delete(doc(db, "users", userDoc.id));
 
       for (const [col, archiveCol] of Object.entries(collectionsMap)) {
