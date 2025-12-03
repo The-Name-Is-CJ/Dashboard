@@ -1,4 +1,11 @@
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FiSearch } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
@@ -127,6 +134,32 @@ const ReturnRefund = () => {
   const RefundModal = () => {
     if (!modalOpen || !selectedOrder) return null;
 
+    const handleRefund = async () => {
+      try {
+        await updateDoc(doc(db, "return_refund", selectedOrder.id), {
+          status: "Approved",
+        });
+
+        setModalOpen(false);
+        setSelectedOrder(null);
+      } catch (error) {
+        console.error("Error approving refund:", error);
+      }
+    };
+
+    const handleDisapprove = async () => {
+      try {
+        await updateDoc(doc(db, "return_refund", selectedOrder.id), {
+          status: "Disapproved",
+        });
+
+        setModalOpen(false);
+        setSelectedOrder(null);
+      } catch (error) {
+        console.error("Error disapproving refund:", error);
+      }
+    };
+
     return (
       <div
         style={{
@@ -176,8 +209,7 @@ const ReturnRefund = () => {
             </p>
             <p>
               <strong>Address:</strong> {selectedOrder.street},{" "}
-              {selectedOrder.barangay}, {selectedOrder.municipality},{" "}
-              {selectedOrder.province || ""}
+              {selectedOrder.barangay}, {selectedOrder.municipality}
             </p>
             <p>
               <strong>Product:</strong> {selectedOrder.productName}
@@ -218,15 +250,7 @@ const ReturnRefund = () => {
             }}
           >
             <button
-              onClick={() => {
-                setOrders((prev) =>
-                  prev.map((o) =>
-                    o.id === selectedOrder.id ? { ...o, status: "refunded" } : o
-                  )
-                );
-                setModalOpen(false);
-                setSelectedOrder(null);
-              }}
+              onClick={handleRefund}
               style={{
                 backgroundColor: "#28a745",
                 color: "#fff",
@@ -243,17 +267,7 @@ const ReturnRefund = () => {
             </button>
 
             <button
-              onClick={() => {
-                setOrders((prev) =>
-                  prev.map((o) =>
-                    o.id === selectedOrder.id
-                      ? { ...o, status: "disapproved" }
-                      : o
-                  )
-                );
-                setModalOpen(false);
-                setSelectedOrder(null);
-              }}
+              onClick={handleDisapprove}
               style={{
                 backgroundColor: "#dc3545",
                 color: "#fff",
@@ -269,12 +283,10 @@ const ReturnRefund = () => {
             </button>
           </div>
 
-          {/* CLOSE BUTTON */}
           <button
             onClick={() => {
               setModalOpen(false);
               setSelectedOrder(null);
-              setStatusAction(null);
             }}
             style={{
               marginTop: "15px",
@@ -429,16 +441,16 @@ const ReturnRefund = () => {
                 <TableData style={{ textAlign: "center" }}>
                   <button
                     onClick={() => {
-                      if (!order.status) {
+                      if (order.status === "Pending" || !order.status) {
                         setSelectedOrder(order);
                         setModalOpen(true);
                       }
                     }}
                     style={{
                       backgroundColor:
-                        order.status === "refunded"
+                        order.status === "Approved"
                           ? "green"
-                          : order.status === "disapproved"
+                          : order.status === "Disapproved"
                           ? "red"
                           : "#9747FF",
                       color: "#fff",
@@ -446,13 +458,19 @@ const ReturnRefund = () => {
                       borderRadius: "6px",
                       border: "none",
                       fontWeight: "bold",
-                      cursor: order.status ? "default" : "pointer",
+                      cursor:
+                        order.status === "Pending" || !order.status
+                          ? "pointer"
+                          : "default",
                     }}
-                    disabled={!!order.status}
+                    disabled={
+                      order.status === "Approved" ||
+                      order.status === "Disapproved"
+                    }
                   >
-                    {order.status === "refunded"
+                    {order.status === "Approved"
                       ? "Refunded"
-                      : order.status === "disapproved"
+                      : order.status === "Disapproved"
                       ? "Disapproved"
                       : "View"}
                   </button>
