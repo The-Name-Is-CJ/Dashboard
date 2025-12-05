@@ -130,6 +130,22 @@ const AdminLogin = () => {
       );
       const user = userCredential.user;
 
+      // Enforce email verification for all admins except the special account
+      const exemptEmail = "admin@gmail.com";
+      if (
+        user &&
+        !user.emailVerified &&
+        user.email?.trim().toLowerCase() !== exemptEmail
+      ) {
+        // sign out immediately and inform the user
+        await auth.signOut();
+        setErrorMsg(
+          "Please verify your email address before logging in. A verification link was sent to your email."
+        );
+        setIsLoading(false);
+        return;
+      }
+
       if (!allowedEmails.includes(user.email.trim().toLowerCase())) {
         await auth.signOut();
         setErrorMsg("Unauthorized admin account.");

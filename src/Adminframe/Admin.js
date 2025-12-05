@@ -14,8 +14,10 @@ import {
 } from "firebase/firestore";
 
 import { useEffect, useState } from "react";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+// eye icons removed since password fields are now auto-generated
 import { auth, db } from "../firebase";
+import { sendEmailVerification } from "firebase/auth";
+import { setDoc, doc as firestoreDoc } from "firebase/firestore";
 
 const Admin = () => {
   const [loading, setLoading] = useState(true);
@@ -24,14 +26,11 @@ const Admin = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    password: "",
-    confirmPassword: "",
+    // passwords removed from UI — will be auto-generated
   });
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pendingDocId, setPendingDocId] = useState("");
   const [confirmAction, setConfirmAction] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [focusedField, setFocusedField] = useState("");
 
   const adminDocs = {
@@ -79,7 +78,7 @@ const Admin = () => {
   const handleConfirmYes = () => {
     if (confirmAction === "add") {
       setCurrentDocId(pendingDocId);
-      setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+      setFormData({ name: "", email: "" });
       setModalOpen(true);
     } else if (confirmAction === "remove") {
       handleRemoveAdmin(pendingDocId);
@@ -95,7 +94,7 @@ const Admin = () => {
 
   const handleCloseModal = () => {
     setModalOpen(false);
-    setFormData({ name: "", email: "", password: "", confirmPassword: "" });
+    setFormData({ name: "", email: "" });
   };
 
   const handleAddAdmin = async (docId, name, email, password) => {
@@ -109,6 +108,43 @@ const Admin = () => {
 
       // 👤 Create Firebase Auth user
       await createUserWithEmailAndPassword(auth, email, password);
+
+      // If the created user is the new auth currentUser, capture it
+      const newUser = auth.currentUser;
+
+      // === Send verification email unless this is the special admin account ===
+      const skipVerificationFor = "admin@gmail.com";
+      let verificationSent = false;
+      if (email !== skipVerificationFor) {
+        try {
+          // send default firebase verification (backend can send custom HTML using Admin SDK)
+          await sendEmailVerification(newUser);
+          verificationSent = true;
+        } catch (err) {
+          console.warn("Failed to send verification email:", err);
+        }
+      }
+
+      // === Save an invite document so a backend/cloud-function can send a custom-styled email ===
+      try {
+        const inviteRef = firestoreDoc(db, "adminInvites", email);
+        await setDoc(inviteRef, {
+          email,
+          password,
+          name,
+          createdBy: auth.currentUser?.email || "Unknown",
+          createdAt: new Date().toISOString(),
+          verificationRequested: email !== skipVerificationFor,
+          verificationSent,
+          colorPalette: {
+            primary: "#7C4DFF",
+            gradientStart: "#a166ff",
+            gradientEnd: "#ebdfff",
+          },
+        });
+      } catch (err) {
+        console.warn("Failed to create invite record:", err);
+      }
 
       // 📝 Save admin in Firestore
       const docRef = doc(db, "admins", docId);
@@ -130,7 +166,32 @@ const Admin = () => {
       // 🟣 Update UI
       setAdmins((prev) => ({ ...prev, [docId]: { name, email } }));
 
-      alert(`✅ Admin added successfully: ${email}`);
+      // === Try to copy the generated password to clipboard ===
+      let copiedToClipboard = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(password);
+          copiedToClipboard = true;
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = password;
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const successful = document.execCommand("copy");
+          document.body.removeChild(textarea);
+          copiedToClipboard = !!successful;
+        }
+      } catch (err) {
+        console.warn("Clipboard copy failed:", err);
+        copiedToClipboard = false;
+      }
+      // Show the generated password to the creating admin so they can copy/send if needed
+      alert(`✅ Admin added successfully: ${email}\n\nPassword: ${password}\n\nA verification email was ${
+        verificationSent ? "sent" : email === "admin@gmail.com" ? "skipped for this account" : "not sent (check logs)"
+      }.${copiedToClipboard ? "\n\nThe password was copied to your clipboard." : "\n\n(Unable to copy password to clipboard automatically)"}`);
       handleCloseModal();
     } catch (error) {
       console.error(error);
@@ -141,11 +202,30 @@ const Admin = () => {
   const handleSubmit = async () => {
     const name = formData.name.trim();
     const email = formData.email.trim();
-    const password = formData.password;
-    const confirmPassword = formData.confirmPassword;
+    // generate a strong random password for the new admin
+    const generatePassword = (length = 12) => {
+      const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const lower = "abcdefghijklmnopqrstuvwxyz";
+      const digits = "0123456789";
+      const symbols = "!@#$%^&*-_";
+      const all = upper + lower + digits + symbols;
+      let pwd = "";
+      // ensure at least one of each
+      pwd += upper[Math.floor(Math.random() * upper.length)];
+      pwd += lower[Math.floor(Math.random() * lower.length)];
+      pwd += digits[Math.floor(Math.random() * digits.length)];
+      pwd += symbols[Math.floor(Math.random() * symbols.length)];
+      for (let i = 4; i < length; i++) {
+        pwd += all[Math.floor(Math.random() * all.length)];
+      }
+      return pwd
+        .split("")
+        .sort(() => 0.5 - Math.random())
+        .join("");
+    };
 
-    if (!name || !email || !password || !confirmPassword) {
-      alert("Please fill out all fields.");
+    if (!name || !email) {
+      alert("Please fill out name and email.");
       return;
     }
 
@@ -156,11 +236,7 @@ const Admin = () => {
       return;
     }
 
-    if (password !== confirmPassword) {
-      alert("Passwords do not match.");
-      return;
-    }
-
+    const password = generatePassword(12);
     await handleAddAdmin(currentDocId, name, email, password);
   };
 
@@ -349,56 +425,9 @@ const Admin = () => {
               onFocus={() => setFocusedField("email")}
               onBlur={() => setFocusedField("")}
             />
-            <label>Password:</label>
-            <div style={passwordContainer}>
-              <input
-                type={showPassword ? "text" : "password"}
-                style={{
-                  ...inputStyleWithIcon,
-                  borderColor: focusedField === "password" ? "#7C4DFF" : "#ccc",
-                }}
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, password: e.target.value }))
-                }
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField("")}
-              />
-              <button
-                type="button"
-                style={eyeBtn}
-                onClick={() => setShowPassword((prev) => !prev)}
-              >
-                {showPassword ? <FaEyeSlash /> : <FaEye />}
-              </button>
-            </div>
-            <label>Confirm Password:</label>
-            <div style={passwordContainer}>
-              <input
-                type={showConfirm ? "text" : "password"}
-                style={{
-                  ...inputStyleWithIcon,
-                  borderColor:
-                    focusedField === "confirmPassword" ? "#7C4DFF" : "#ccc",
-                }}
-                value={formData.confirmPassword}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    confirmPassword: e.target.value,
-                  }))
-                }
-                onFocus={() => setFocusedField("confirmPassword")}
-                onBlur={() => setFocusedField("")}
-              />
-              <button
-                type="button"
-                style={eyeBtn}
-                onClick={() => setShowConfirm((prev) => !prev)}
-              >
-                {showConfirm ? <FaEyeSlash /> : <FaEye />}
-              </button>
-            </div>
+            <p style={{ marginTop: "0.5rem", marginBottom: "0.5rem", color: "#333" }}>
+              A password will be generated automatically and emailed to the new admin.
+            </p>
             <div
               style={{
                 display: "flex",
