@@ -1,19 +1,18 @@
 import { signInWithEmailAndPassword } from "firebase/auth";
 import {
+  addDoc,
   collection,
   getDocs,
-  serverTimestamp,
-  addDoc,
-  query,
-  where,
   orderBy,
+  query,
+  serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
-import { warning } from "framer-motion";
 
 const AdminLogin = () => {
   const [email, setEmail] = useState("");
@@ -45,17 +44,14 @@ const AdminLogin = () => {
   }, []);
 
   const logUnauthorizedAttempt = async (email) => {
-    // 1️⃣ Log every attempt with Firestore timestamp
     await addDoc(collection(db, "unauthorizedAttempts"), {
       email,
       note: "Unauthorized Admin Login Attempt",
       timestamp: serverTimestamp(),
     });
 
-    // 2️⃣ Calculate 10 minutes ago
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    // 3️⃣ Query all attempts in the last 10 minutes
     const q = query(
       collection(db, "unauthorizedAttempts"),
       where("email", "==", email),
@@ -72,7 +68,6 @@ const AdminLogin = () => {
     );
 
     if (attemptsCount >= 5) {
-      // Query for existing suspicious log in the last 10 minutes
       const suspiciousQuery = query(
         collection(db, "suspiciousLogins"),
         where("email", "==", email),
@@ -82,7 +77,6 @@ const AdminLogin = () => {
       const suspiciousSnapshot = await getDocs(suspiciousQuery);
 
       if (suspiciousSnapshot.empty) {
-        // No recent suspicious log → create new
         await addDoc(collection(db, "suspiciousLogins"), {
           email,
           warning: "Suspicious Admin Login Attempts",
@@ -91,7 +85,6 @@ const AdminLogin = () => {
           note: "5 or more failed attempts in last 10 minutes",
         });
       } else {
-        // Existing suspicious log → update attempts
         const docRef = suspiciousSnapshot.docs[0].ref;
         await updateDoc(docRef, {
           attempts: attemptsCount,
@@ -99,7 +92,6 @@ const AdminLogin = () => {
         });
       }
 
-      // Always show warning
       alert(
         `⚠️ Warning: This account has tried unsuccessfully ${attemptsCount} times in the last 10 minutes.`
       );
@@ -109,7 +101,7 @@ const AdminLogin = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg("");
-    setIsLoading(true); // ⬅️ START LOADING
+    setIsLoading(true);
 
     const inputEmail = email.trim().toLowerCase();
 
@@ -118,7 +110,7 @@ const AdminLogin = () => {
       setEmail("");
       setPassword("");
       await logUnauthorizedAttempt(inputEmail);
-      setIsLoading(false); // ⬅️ STOP LOADING
+      setIsLoading(false);
       return;
     }
 
@@ -150,17 +142,17 @@ const AdminLogin = () => {
         await auth.signOut();
         setErrorMsg("Unauthorized admin account.");
         await logUnauthorizedAttempt(inputEmail);
-        setIsLoading(false); // ⬅️ STOP LOADING
+        setIsLoading(false);
         return;
       }
       let adminEmail = "Unknown admin";
-      let adminRole = "Admin"; // fallback
+      let adminRole = "Admin";
       try {
         const adminSnap = await getDocs(collection(db, "admins"));
         if (!adminSnap.empty) {
           const adminDoc = adminSnap.docs[0].data();
           adminEmail = adminDoc.email || "Unknown admin";
-          adminRole = adminDoc.role || "Admin"; // get role from the doc
+          adminRole = adminDoc.role || "Admin";
         }
       } catch (err) {
         console.error("Error fetching admin info:", err);
@@ -192,7 +184,7 @@ const AdminLogin = () => {
       }
     }
 
-    setIsLoading(false); // ⬅️ STOP LOADING (always runs)
+    setIsLoading(false);
   };
 
   return (

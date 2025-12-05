@@ -94,7 +94,7 @@ const Sidebar = () => {
 
   return (
     <SidebarContainer>
-      <Logo>TryFit Admin</Logo>
+      <Logo>Seller Panel</Logo>
 
       <NavItem to="/seller/sellerdashboard">
         <FaTachometerAlt /> Dashboard

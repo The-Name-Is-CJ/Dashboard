@@ -1,27 +1,25 @@
-import { NavLink } from "react-router-dom";
-import styled from "styled-components";
 import {
+  FaArchive,
+  FaClipboardList,
+  FaSignOutAlt,
   FaTachometerAlt,
   FaUser,
   FaUsers,
   FaUserShield,
-  FaClipboardList,
-  FaServer,
-  FaArchive,
-  FaSignOutAlt,
 } from "react-icons/fa";
+import { NavLink } from "react-router-dom";
+import styled from "styled-components";
 
 const Colors = {
-  primary: "#fff", // main sidebar background
-  secondary: "#6f42c1", // active/nav hover background
-  accent: "#9b7bff", // not used here, optional
-  white: "#fff", // text color for active nav
-  gray: "#777", // default nav text color
+  primary: "#fff",
+  secondary: "#6f42c1",
+  accent: "#9b7bff",
+  white: "#fff",
+  gray: "#777",
 };
 
 const { primary, secondary, white, gray } = Colors;
 
-// Styled Components
 const SidebarContainer = styled.div`
   width: 250px;
   background-color: ${primary};

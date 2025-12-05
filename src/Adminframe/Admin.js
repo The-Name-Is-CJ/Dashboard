@@ -99,14 +99,12 @@ const Admin = () => {
 
   const handleAddAdmin = async (docId, name, email, password) => {
     try {
-      // 🔍 Prevent duplicate email
       const signInMethods = await fetchSignInMethodsForEmail(auth, email);
       if (signInMethods.length > 0) {
         alert("This email already exists. Use a different one.");
         return;
       }
 
-      // 👤 Create Firebase Auth user
       await createUserWithEmailAndPassword(auth, email, password);
 
       // If the created user is the new auth currentUser, capture it
@@ -150,7 +148,6 @@ const Admin = () => {
       const docRef = doc(db, "admins", docId);
       await updateDoc(docRef, { name, email });
 
-      // ⭐ NEW: Add activity log
       const logID =
         "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
 
@@ -163,7 +160,6 @@ const Admin = () => {
         timestamp: new Date().toISOString(),
       });
 
-      // 🟣 Update UI
       setAdmins((prev) => ({ ...prev, [docId]: { name, email } }));
 
       // === Try to copy the generated password to clipboard ===
@@ -229,7 +225,6 @@ const Admin = () => {
       return;
     }
 
-    // email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       alert("Please enter a valid email address.");
@@ -250,7 +245,6 @@ const Admin = () => {
       const removedAdmin = admins[docId];
       const adminEmail = removedAdmin.email;
 
-      // === 1. Generate unique remove ID ===
       const generateRemoveId = () => {
         const randomHex = Math.floor(Math.random() * 0xffffff)
           .toString(16)
@@ -260,48 +254,53 @@ const Admin = () => {
       };
       const removeId = generateRemoveId();
 
-      // === 2. Fetch all recentActivityLogs for this admin ===
+      // Get the admin logs
       const logsQuery = query(
         collection(db, "recentActivityLogs"),
         where("userEmail", "==", adminEmail)
       );
-
       const logsSnapshot = await getDocs(logsQuery);
       const adminLogs = logsSnapshot.docs.map((doc) => doc.data());
 
-      // === 3. Save archive into adminArchive ===
+      // Archive admin info (without logs)
       await addDoc(collection(db, "adminArchive"), {
         removeId,
         name: removedAdmin.name,
         email: removedAdmin.email,
         archiveFrom: docId,
-        archivedAt: new Date().toISOString(),
-        recentActivityLogs: adminLogs, // ⬅️ ALL LOGS SAVED HERE
+        archivedAt: new Date(),
       });
 
-      // === 4. Clear admin slot ===
+      // Remove admin info
       const docRef = doc(db, "admins", docId);
       await updateDoc(docRef, { name: "", email: "" });
 
-      // === 5. Update UI ===
       setAdmins((prev) => ({
         ...prev,
         [docId]: { name: "", email: "" },
       }));
 
-      // ⭐⭐⭐ NEW — Create recent activity log
+      // Add logs to recentActivityLogs collection
+      for (const log of adminLogs) {
+        await addDoc(collection(db, "recentActivityLogs"), {
+          ...log,
+          archivedAdminRemoveId: removeId, // optional: track which admin removal this belongs to
+        });
+      }
+
+      // Add action log for this removal
       const currentAdminId = Object.keys(admins).find(
         (key) => admins[key].email === auth.currentUser?.email
       );
-
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: "LOG-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
         action: `Admin (${
           admins[currentAdminId]?.email || "Unknown"
         }) removed admin ${removedAdmin.email}`,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(),
         userEmail: admins[currentAdminId]?.email || "Unknown",
         role: admins[currentAdminId]?.role || "Unknown",
+        archivedAdminRemoveId: removeId,
       });
 
       alert(

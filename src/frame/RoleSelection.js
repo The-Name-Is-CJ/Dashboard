@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const RoleSelection = () => {
@@ -35,7 +35,6 @@ const RoleSelection = () => {
         </div>
       </div>
 
-      {/* POPUP MODAL */}
       {showAdminPopup && (
         <div className="popup-overlay">
           <div className="popup">

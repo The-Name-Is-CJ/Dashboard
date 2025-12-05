@@ -316,7 +316,7 @@ const Dashboard = () => {
       const snapshot = await getDocs(q);
       const logsData = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data(), expanded: false }))
-        .filter((log) => log.role === "Seller"); // filter logs with role "Seller"
+        .filter((log) => log.role === "Seller");
 
       setLogs(logsData);
     };
@@ -381,13 +381,11 @@ const Dashboard = () => {
     setModalMessage("Move this log to deleted logs?");
     setConfirmAction(() => async () => {
       try {
-        // Get the log data
         const logRef = doc(db, "recentActivityLogs", id);
         const logSnap = await getDoc(logRef);
         if (!logSnap.exists()) throw new Error("Log not found");
         const logData = logSnap.data();
 
-        // Add to deletedLogs doc (single doc called 'allDeletedLogs')
         const deletedDocRef = doc(db, "deletedLogs", "allDeletedLogs");
         const deletedSnap = await getDoc(deletedDocRef);
 
@@ -399,7 +397,6 @@ const Dashboard = () => {
           await setDoc(deletedDocRef, { logs: [{ id, ...logData }] });
         }
 
-        // Remove from recentActivityLogs
         await deleteDoc(logRef);
 
         setLogs((prev) => prev.filter((log) => log.id !== id));
@@ -435,7 +432,6 @@ const Dashboard = () => {
           await setDoc(deletedDocRef, { logs: allLogs });
         }
 
-        // Delete all from recentActivityLogs
         await Promise.all(
           snap.docs.map((d) => deleteDoc(doc(db, "recentActivityLogs", d.id)))
         );
@@ -473,7 +469,6 @@ const Dashboard = () => {
         const deletedDocRef = doc(db, "deletedLogs", "allDeletedLogs");
         const deletedSnap = await getDoc(deletedDocRef);
 
-        // Fetch all selected logs
         const logsToMove = await Promise.all(
           selectedLogs.map(async (id) => {
             const snap = await getDoc(doc(db, "recentActivityLogs", id));
@@ -483,7 +478,6 @@ const Dashboard = () => {
 
         const validLogs = logsToMove.filter(Boolean);
 
-        // Add to deletedLogs
         if (deletedSnap.exists()) {
           await updateDoc(deletedDocRef, {
             logs: arrayUnion(...validLogs),
@@ -492,7 +486,6 @@ const Dashboard = () => {
           await setDoc(deletedDocRef, { logs: validLogs });
         }
 
-        // Delete from recentActivityLogs
         await Promise.all(
           selectedLogs.map((id) => deleteDoc(doc(db, "recentActivityLogs", id)))
         );

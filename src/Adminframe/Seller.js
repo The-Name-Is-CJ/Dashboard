@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from "react";
 import {
   addDoc,
   collection,
@@ -6,21 +5,21 @@ import {
   doc,
   getDocs,
   serverTimestamp,
-  updateDoc,
-  onSnapshot,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
-import {
-  ModalOverlay,
-  ModalContent,
-  ModalTitle,
-  Label,
-  Input,
-  SaveButton,
-  CancelButton,
-} from "../components/dashboardstyles";
+import { useEffect, useState } from "react";
 import { FaUserCircle } from "react-icons/fa";
+import {
+  CancelButton,
+  Input,
+  Label,
+  ModalContent,
+  ModalOverlay,
+  ModalTitle,
+  SaveButton,
+} from "../components/dashboardstyles";
+import { db } from "../firebase";
 
 const SIZE_OPTIONS = ["S", "M", "L", "XL"];
 const Colors = {
@@ -56,7 +55,6 @@ const Seller = () => {
     return `LOG-${timestamp}-${random}`;
   };
 
-  // Fetch sellers (assume there is one doc in the seller collection)
   const fetchSellers = async () => {
     const snap = await getDocs(collection(db, "seller"));
     const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -67,7 +65,6 @@ const Seller = () => {
     fetchSellers();
   }, []);
 
-  // Open Change Email/Name Modal
   const openChangeModal = (seller) => {
     setSelectedSeller(seller);
     setNewEmail(seller.email || "");
@@ -79,11 +76,9 @@ const Seller = () => {
     if (!selectedSeller) return;
 
     try {
-      // 1️⃣ Update seller info
       const sellerRef = doc(db, "seller", selectedSeller.id);
       await updateDoc(sellerRef, { email: newEmail, name: newName });
 
-      // 2️⃣ Create activity log BEFORE showing success modal
       let adminData = null;
       try {
         const adminSnap = await getDocs(collection(db, "admins"));
@@ -109,7 +104,6 @@ const Seller = () => {
       setSuccessModal(true);
       fetchSellers();
 
-      // 4️⃣ Close modal
       setShowChangeModal(false);
       setSelectedSeller(null);
 
@@ -122,7 +116,6 @@ const Seller = () => {
     }
   };
 
-  // Open Remove Modal
   const openRemoveModal = (seller) => {
     setSelectedSeller(seller);
     setShowRemoveModal(true);
@@ -132,21 +125,16 @@ const Seller = () => {
     if (!selectedSeller) return;
 
     try {
-      // 1️⃣ Move seller data to sellerArchive
       const archiveRef = doc(db, "sellerArchive", selectedSeller.id);
       await setDoc(archiveRef, {
         ...selectedSeller,
         archivedAt: serverTimestamp(),
       });
 
-      // 2️⃣ Delete seller from original collection
       await deleteDoc(doc(db, "seller", selectedSeller.id));
 
-      // 3️⃣ Fetch updated sellers
       fetchSellers();
 
-      // 4️⃣ Create activity log
-      // Fetch admin info if needed
       let adminData = null;
       try {
         const adminSnap = await getDocs(collection(db, "admins"));
@@ -169,7 +157,6 @@ const Seller = () => {
         timestamp: serverTimestamp(),
       });
 
-      // 5️⃣ Close modal and reset state
       setShowRemoveModal(false);
       setSelectedSeller(null);
     } catch (error) {
@@ -204,23 +191,25 @@ const Seller = () => {
     return value ? value.toString().trim() : "";
   };
 
-  const generateNextProductID = () => {
-    if (requestProducts.length === 0) return "CP001";
+  const generateNextProductID = async () => {
+    try {
+      const productsSnapshot = await getDocs(collection(db, "products"));
+      const ids = productsSnapshot.docs
+        .map((doc) => doc.data().productID)
+        .filter(
+          (id) =>
+            typeof id === "string" &&
+            id.startsWith("CP") &&
+            /^\d{3,}$/.test(id.slice(2)) // allow 3 or more digits
+        )
+        .map((id) => parseInt(id.slice(2), 10));
 
-    const ids = requestProducts
-      .map((p) => p.productID)
-      .filter(
-        (id) =>
-          typeof id === "string" &&
-          id.startsWith("CP") &&
-          /^\d{3}$/.test(id.slice(2))
-      )
-      .map((id) => parseInt(id.slice(2), 10));
-
-    if (ids.length === 0) return "CP001";
-
-    const nextNumber = Math.max(...ids) + 1;
-    return "CP" + nextNumber.toString().padStart(3, "0");
+      const nextNumber = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+      return "CP" + nextNumber.toString().padStart(3, "0");
+    } catch (err) {
+      console.error("Error generating next product ID:", err);
+      return "CP001"; // fallback
+    }
   };
 
   const handleModalClick = (e) => {
@@ -234,23 +223,20 @@ const Seller = () => {
 
   const handleSaveEdit = async () => {
     try {
-      // 1. Generate Product ID
-      const newProductID = generateNextProductID();
+      // Generate the next productID for the field only
+      const newProductID = await generateNextProductID();
 
-      // 2. Firestore references
-      const productRef = doc(db, "products", newProductID);
-      const requestRef = doc(db, "sellerRequest", editProduct.id);
+      // Use addDoc instead of setDoc to let Firestore create its own doc ID
+      const productRef = collection(db, "products");
 
-      // 3. Compute stock
       const updatedStock = initializeFullStock(editProduct.stock || {});
       const totalStock = Object.values(updatedStock).reduce(
         (sum, val) => sum + val,
         0
       );
 
-      // 4. SAVE into products (complete data)
-      await setDoc(productRef, {
-        productID: newProductID,
+      await addDoc(productRef, {
+        productID: newProductID, // just the field
         productName: editProduct.productName,
         price: Number(editProduct.price),
         delivery: formatDelivery(editProduct.delivery),
@@ -266,27 +252,27 @@ const Seller = () => {
         editedAt: serverTimestamp(),
       });
 
-      // 5. Delete original seller request
+      // Delete the request after approving
+      const requestRef = doc(db, "sellerRequest", editProduct.id);
       await deleteDoc(requestRef);
 
       let adminEmail = "Unknown admin";
-      let adminRole = "Admin"; // fallback
+      let adminRole = "Admin";
       try {
         const adminSnap = await getDocs(collection(db, "admins"));
         if (!adminSnap.empty) {
           const adminDoc = adminSnap.docs[0].data();
           adminEmail = adminDoc.email || "Unknown admin";
-          adminRole = adminDoc.role || "Admin"; // get role from the doc
+          adminRole = adminDoc.role || "Admin";
         }
       } catch (err) {
         console.error("Error fetching admin info:", err);
       }
 
-      // 7. Log the approval
       await addDoc(collection(db, "recentActivityLogs"), {
         logID: generateLogID(),
         userEmail: adminEmail,
-        role: adminRole, // dynamic role
+        role: adminRole,
         action: `Approved and moved product "${editProduct.productName}"`,
         productID: newProductID,
         timestamp: serverTimestamp(),
@@ -297,7 +283,6 @@ const Seller = () => {
         snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
       );
 
-      // 9. Close modal
       setEditProduct(null);
       setOriginalData(null);
     } catch (error) {
@@ -355,14 +340,14 @@ const Seller = () => {
           }}
           onMouseEnter={(e) => {
             if (activeTab !== "Sellers") {
-              e.currentTarget.style.backgroundColor = "#b892ff"; // hover background
-              e.currentTarget.style.color = Colors.black; // hover text
+              e.currentTarget.style.backgroundColor = "#b892ff";
+              e.currentTarget.style.color = Colors.black;
             }
           }}
           onMouseLeave={(e) => {
             if (activeTab !== "Sellers") {
-              e.currentTarget.style.backgroundColor = Colors.accent; // original background
-              e.currentTarget.style.color = Colors.white; // original text
+              e.currentTarget.style.backgroundColor = Colors.accent;
+              e.currentTarget.style.color = Colors.white;
             }
           }}
         >
@@ -385,14 +370,14 @@ const Seller = () => {
           }}
           onMouseEnter={(e) => {
             if (activeTab !== "Requests") {
-              e.currentTarget.style.backgroundColor = "#b892ff"; // hover background
-              e.currentTarget.style.color = Colors.black; // hover text
+              e.currentTarget.style.backgroundColor = "#b892ff";
+              e.currentTarget.style.color = Colors.black;
             }
           }}
           onMouseLeave={(e) => {
             if (activeTab !== "Requests") {
-              e.currentTarget.style.backgroundColor = Colors.accent; // original background
-              e.currentTarget.style.color = Colors.white; // original text
+              e.currentTarget.style.backgroundColor = Colors.accent;
+              e.currentTarget.style.color = Colors.white;
             }
           }}
         >
@@ -405,9 +390,9 @@ const Seller = () => {
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: "30px", // more gap
+            gap: "30px",
             justifyContent: "center",
-            maxWidth: "1200px", // wider container
+            maxWidth: "1200px",
             margin: "0 auto",
           }}
         >
@@ -441,8 +426,8 @@ const Seller = () => {
               >
                 <FaUserCircle
                   style={{
-                    fontSize: "100px", // bigger icon
-                    marginBottom: "20px", // more spacing below
+                    fontSize: "100px",
+                    marginBottom: "20px",
                     color: Colors.accent,
                   }}
                 />
@@ -559,15 +544,15 @@ const Seller = () => {
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "25px",
-                  borderRadius: "10px", // match seller card
-                  backdropFilter: "blur(8px)", // glass effect
+                  borderRadius: "10px",
+                  backdropFilter: "blur(8px)",
                   backgroundColor: Colors.secondary,
-                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)", // match seller card
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
                   color: Colors.black,
                   fontSize: "1.05rem",
                   width: "500px",
                   maxWidth: "700px",
-                  margin: "0 auto", // center in container
+                  margin: "0 auto",
                   transition: "transform 0.2s, box-shadow 0.2s",
                   cursor: "pointer",
                 }}
@@ -621,8 +606,8 @@ const Seller = () => {
             onClick={(e) => e.stopPropagation()}
             style={{
               maxWidth: "95vw",
-              width: "1400px", // wider
-              maxHeight: "90vh", // taller
+              width: "1400px",
+              maxHeight: "90vh",
               overflowY: "auto",
               padding: "2rem",
               display: "grid",
@@ -769,8 +754,8 @@ const Seller = () => {
                   style={{
                     marginTop: "5px",
                     borderCollapse: "collapse",
-                    width: "100%", // full width
-                    tableLayout: "fixed", // uniform column widths
+                    width: "100%",
+                    tableLayout: "fixed",
                     background: "#fff",
                     color: "#000",
                   }}
@@ -896,7 +881,7 @@ const Seller = () => {
                   marginTop: "2rem",
                   display: "flex",
                   justifyContent: "center",
-                  gap: "4rem", // space between buttons
+                  gap: "4rem",
                 }}
               >
                 <SaveButton onClick={handleSaveEdit}>Save</SaveButton>
@@ -909,7 +894,6 @@ const Seller = () => {
         </ModalOverlay>
       )}
 
-      {/* Change Email/Name Modal */}
       {showChangeModal && (
         <ModalOverlay onClick={() => setShowChangeModal(false)}>
           <ModalContent onClick={(e) => e.stopPropagation()}>
@@ -934,7 +918,6 @@ const Seller = () => {
         </ModalOverlay>
       )}
 
-      {/* Remove Seller Modal */}
       {showRemoveModal && (
         <ModalOverlay
           style={{
@@ -943,7 +926,7 @@ const Seller = () => {
             left: 0,
             width: "100vw",
             height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.5)", // dim overlay
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
@@ -956,13 +939,13 @@ const Seller = () => {
             style={{
               maxWidth: "400px",
               width: "90%",
-              padding: "20px", // equal padding
+              padding: "20px",
               borderRadius: "12px",
               display: "flex",
               flexDirection: "column",
               gap: "12px",
               boxSizing: "border-box",
-              color: "#000", // black text
+              color: "#000",
               backgroundColor: "#fff",
               boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
             }}
@@ -1001,17 +984,17 @@ const Seller = () => {
             left: 0,
             width: "100vw",
             height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.5)", // semi-transparent overlay
+            backgroundColor: "rgba(0,0,0,0.5)",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            zIndex: 9999, // ensure it’s on top
-            pointerEvents: "auto", // blocks interaction
+            zIndex: 9999,
+            pointerEvents: "auto",
           }}
         >
           <div
             style={{
-              backgroundColor: "#4BB543", // green success
+              backgroundColor: "#4BB543",
               color: "#fff",
               padding: "30px 50px",
               borderRadius: "12px",
@@ -1019,7 +1002,7 @@ const Seller = () => {
               fontWeight: "600",
               textAlign: "center",
               boxShadow: "0 6px 20px rgba(0,0,0,0.3)",
-              pointerEvents: "none", // allow clicks to be blocked only on overlay
+              pointerEvents: "none",
             }}
           >
             Changes in seller account are successful!

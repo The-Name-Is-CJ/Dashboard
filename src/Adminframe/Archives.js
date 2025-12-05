@@ -1,21 +1,19 @@
-import React, { useEffect, useState } from "react";
-import styled from "styled-components";
 import {
-  collection,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-  updateDoc,
-  getDoc,
   addDoc,
-  writeBatch,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
   query,
-  where,
   serverTimestamp,
+  where,
+  writeBatch,
+  setDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { useEffect, useState } from "react";
 import { FaUser } from "react-icons/fa";
+import styled from "styled-components";
+import { db } from "../firebase";
 
 const PersonIcon = FaUser;
 
@@ -28,7 +26,6 @@ const Colors = {
   gray: "#777",
 };
 
-// PAGE
 const PageContainer = styled.div`
   padding: 30px;
   background: linear-gradient(135deg, #a349f7ff, #b8b3d7ff);
@@ -38,7 +35,6 @@ const PageContainer = styled.div`
   font-family: "Poppins", sans-serif;
 `;
 
-// NAVIGATION
 const NavBar = styled.div`
   display: flex;
   gap: 15px;
@@ -98,12 +94,12 @@ const ListItem = styled.div`
   justify-content: space-between;
   align-items: center;
   transition: 0.2s;
-  color: black; /* ← FORCE TEXT VISIBLE */
+  color: black;
 
   &:hover {
     background: ${Colors.accent};
     transform: translateX(5px);
-    color: white; /* ← optional: white text on hover */
+    color: white;
   }
 `;
 
@@ -148,7 +144,6 @@ const Archives = () => {
   useEffect(() => {
     const fetchArchives = async () => {
       try {
-        // Fetch each main archive collection like admin/seller
         const fetchCollection = async (collectionName) => {
           const snap = await getDocs(collection(db, collectionName));
           return snap.docs.map((doc) => ({
@@ -173,7 +168,6 @@ const Archives = () => {
         setCompleted(completedArr);
         setCancelled(cancelledArr);
 
-        // --- Admin Archive ---
         const adminSnap = await getDocs(collection(db, "adminArchive"));
         const adminArr = adminSnap.docs.map((doc) => ({
           id: doc.id,
@@ -181,7 +175,6 @@ const Archives = () => {
         }));
         setAdminArchives(adminArr);
 
-        // --- Seller Archive ---
         const sellerSnap = await getDocs(collection(db, "sellerArchive"));
         const sellerArr = sellerSnap.docs.map((doc) => ({
           id: doc.id,
@@ -189,7 +182,6 @@ const Archives = () => {
         }));
         setSellerArchives(sellerArr);
 
-        // --- Removed Products ---
         const removedSnap = await getDocs(collection(db, "removedProducts"));
         const removedArr = removedSnap.docs.map((doc) => ({
           id: doc.id,
@@ -250,7 +242,7 @@ const Archives = () => {
 
     try {
       const archiveId = restoreItem.id;
-      const archiveCollection = restoreItem.archiveCollection; // already set when clicking Restore
+      const archiveCollection = restoreItem.archiveCollection;
       const originalCollection = collectionMap[archiveCollection];
 
       if (!originalCollection) {
@@ -258,7 +250,6 @@ const Archives = () => {
         return;
       }
 
-      // Use the restoreItem itself as the document to restore, remove id and archiveCollection
       const { id, archiveCollection: _, ...archivedData } = restoreItem;
 
       if (!archivedData || Object.keys(archivedData).length === 0) {
@@ -266,13 +257,18 @@ const Archives = () => {
         return;
       }
 
-      // 1️⃣ Restore the document to its original collection
-      await addDoc(collection(db, originalCollection), archivedData);
+      const originalDocId = archivedData.originalDocId || archivedData.userId;
+
+      const restoredData = { ...archivedData };
+      delete restoredData.archivedAt;
+      delete restoredData.originalDocId;
+
+      await setDoc(doc(db, originalCollection, originalDocId), restoredData);
+
       console.log(
         `Restored document from ${archiveCollection} to ${originalCollection}.`
       );
 
-      // 2️⃣ Delete the document from the archive collection
       await deleteDoc(doc(db, archiveCollection, archiveId));
       console.log(
         `Deleted archived document ${archiveId} from ${archiveCollection}.`
@@ -283,7 +279,6 @@ const Archives = () => {
         userIdAffected: archiveId,
       });
 
-      // Optional: remove it from local state immediately
       switch (archiveCollection) {
         case "usersArchive":
           setUserArchives((prev) =>
@@ -336,9 +331,8 @@ const Archives = () => {
   const handleRestoreUserWithAllData = async (userId) => {
     try {
       setRestoreLoading(true);
-      const batch = writeBatch(db); // initialize batch
+      const batch = writeBatch(db);
 
-      // Map archive collections to their original collections
       const collectionsMap = {
         usersArchive: "users",
         shippingLocationsArchive: "shippingLocations",
@@ -354,19 +348,26 @@ const Archives = () => {
         toshipArchive: "toShip",
       };
 
-      // 1️⃣ Restore main user doc
       const userSnap = await getDocs(collection(db, "usersArchive"));
       const userDoc = userSnap.docs.find((doc) => doc.data().userId === userId);
       if (!userDoc) return console.error("Archived user not found.");
 
       const userData = userDoc.data();
-      const userRef = doc(collection(db, "users"));
-      batch.set(userRef, userData); // restore user
-      batch.delete(doc(db, "usersArchive", userDoc.id)); // remove from archive
+      const userRef = doc(
+        db,
+        "users",
+        userData.originalDocId || userData.userId
+      );
+      const restoredUserData = { ...userData };
+      delete restoredUserData.archivedAt;
+      delete restoredUserData.originalDocId;
 
-      // 2️⃣ Restore all related collections
+      batch.set(userRef, restoredUserData);
+
+      batch.delete(doc(db, "usersArchive", userDoc.id));
+
       for (const [archiveCol, originalCol] of Object.entries(collectionsMap)) {
-        if (archiveCol === "usersArchive") continue; // skip main user doc
+        if (archiveCol === "usersArchive") continue;
 
         const q = query(
           collection(db, archiveCol),
@@ -376,17 +377,15 @@ const Archives = () => {
 
         colSnap.docs.forEach((docItem) => {
           const originalRef = doc(collection(db, originalCol));
-          batch.set(originalRef, docItem.data()); // restore
-          batch.delete(doc(db, archiveCol, docItem.id)); // remove archive
+          batch.set(originalRef, docItem.data());
+          batch.delete(doc(db, archiveCol, docItem.id));
         });
       }
 
-      // 3️⃣ Commit the batch
       await batch.commit();
 
       console.log(`User ${userId} and all related data restored successfully.`);
 
-      // 4️⃣ Update local state to remove from UI
       setUserArchives((prev) => prev.filter((u) => u.userId !== userId));
       setOrders((prev) => prev.filter((o) => o.userId !== userId));
       setToShip((prev) => prev.filter((o) => o.userId !== userId));
@@ -402,7 +401,7 @@ const Archives = () => {
     } catch (err) {
       console.error("Error restoring user and related data:", err);
     } finally {
-      setRestoreLoading(false); // stop loading
+      setRestoreLoading(false);
     }
   };
 
@@ -453,8 +452,8 @@ const Archives = () => {
   const handleRestoreClickForUser = (item) => {
     if (!item || !item.userId) return;
 
-    setRestoreUserItem(item); // store the clicked user
-    setRestoreUserModalOpen(true); // open user restore modal
+    setRestoreUserItem(item);
+    setRestoreUserModalOpen(true);
   };
 
   const RestoreIcon = ({ onClick }) => (
@@ -475,7 +474,6 @@ const Archives = () => {
     <PageContainer>
       <Title>Archives</Title>
 
-      {/* --- TOP NAVIGATION --- */}
       <NavBar>
         {tabList.map((tab) => (
           <NavItem
@@ -500,12 +498,10 @@ const Archives = () => {
                 gap: "16px",
               }}
             >
-              {/* User Icon */}
               <div style={{ fontSize: "36px", color: "#555" }}>
                 <PersonIcon />
               </div>
 
-              {/* User Info */}
               <ItemInfo style={{ flex: 1 }}>
                 <div>
                   <FieldLabel>User ID:</FieldLabel> {item.userId}
@@ -525,7 +521,7 @@ const Archives = () => {
                   alignItems: "center",
                   cursor: "pointer",
                 }}
-                onClick={() => handleRestoreClickForUser(item)} // use the new function
+                onClick={() => handleRestoreClickForUser(item)}
               >
                 <RestoreIcon />
                 <span
@@ -540,7 +536,6 @@ const Archives = () => {
                 </span>
               </div>
 
-              {/* Timestamp Bottom Right */}
               <div
                 style={{
                   position: "absolute",
@@ -574,12 +569,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Person Icon (same as Users) */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
                   <PersonIcon />
                 </div>
 
-                {/* Seller Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>Name:</FieldLabel> {item.name}
@@ -592,7 +585,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Timestamp Bottom Right (copied layout) */}
                 <div
                   style={{
                     position: "absolute",
@@ -626,12 +618,10 @@ const Archives = () => {
                     gap: "16px",
                   }}
                 >
-                  {/* Person Icon (same as Users/Seller) */}
                   <div style={{ fontSize: "36px", color: "#555" }}>
                     <PersonIcon />
                   </div>
 
-                  {/* Admin Info */}
                   <ItemInfo style={{ flex: 1 }}>
                     <div>
                       <FieldLabel>Name:</FieldLabel> {item.name || "N/A"}
@@ -644,7 +634,6 @@ const Archives = () => {
                     </div>
                   </ItemInfo>
 
-                  {/* Timestamp Bottom Right (same as Users/Seller) */}
                   <div
                     style={{
                       position: "absolute",
@@ -678,12 +667,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
-                  <ProductIcon /> {/* Replace with your actual product icon */}
+                  <ProductIcon />
                 </div>
 
-                {/* Order Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>Order ID:</FieldLabel> {item.orderId}
@@ -699,7 +686,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -722,7 +708,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -759,12 +744,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
-                  <ProductIcon /> {/* Replace with your actual product icon */}
+                  <ProductIcon />
                 </div>
 
-                {/* Order Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>To Ship ID:</FieldLabel> {item.toshipID}
@@ -780,7 +763,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -803,7 +785,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -840,13 +821,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
                   <ProductIcon />{" "}
-                  {/* Replace with your actual product icon component */}
                 </div>
 
-                {/* Order Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>To Receive ID:</FieldLabel> {item.toreceiveID}
@@ -862,7 +840,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -885,7 +862,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -922,12 +898,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
-                  <ProductIcon /> {/* Replace with your actual product icon */}
+                  <ProductIcon />
                 </div>
 
-                {/* Refund Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>Return/Refund ID:</FieldLabel> {item.orderId}
@@ -943,7 +917,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -966,7 +939,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -1003,13 +975,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
                   <ProductIcon />{" "}
-                  {/* Replace with your actual product icon component */}
                 </div>
 
-                {/* Order Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>Completed ID:</FieldLabel> {item.completedID}
@@ -1025,7 +994,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -1048,7 +1016,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -1085,13 +1052,10 @@ const Archives = () => {
                   gap: "16px",
                 }}
               >
-                {/* Product Icon */}
                 <div style={{ fontSize: "36px", color: "#555" }}>
                   <ProductIcon />{" "}
-                  {/* Replace with your actual product icon component */}
                 </div>
 
-                {/* Order Info */}
                 <ItemInfo style={{ flex: 1 }}>
                   <div>
                     <FieldLabel>Cancelled ID:</FieldLabel> {item.cancelledID}
@@ -1107,7 +1071,6 @@ const Archives = () => {
                   </div>
                 </ItemInfo>
 
-                {/* Restore Button */}
                 <div
                   style={{
                     display: "flex",
@@ -1130,7 +1093,6 @@ const Archives = () => {
                   </span>
                 </div>
 
-                {/* Timestamp Bottom Right */}
                 <div
                   style={{
                     position: "absolute",
@@ -1168,7 +1130,6 @@ const Archives = () => {
                     alignItems: "center",
                   }}
                 >
-                  {/* Left Side: Image + Info */}
                   <div
                     style={{
                       display: "flex",
@@ -1207,7 +1168,6 @@ const Archives = () => {
                     </ItemInfo>
                   </div>
 
-                  {/* Restore Button (same layout as Users/Seller/Admin) */}
                   <div
                     style={{
                       display: "flex",
@@ -1231,7 +1191,6 @@ const Archives = () => {
                     </span>
                   </div>
 
-                  {/* Timestamp Bottom Right */}
                   <div
                     style={{
                       position: "absolute",
@@ -1326,7 +1285,7 @@ const Archives = () => {
             justifyContent: "center",
             alignItems: "center",
             zIndex: 9999,
-            pointerEvents: restoreLoading ? "none" : "auto", // disable interactions if loading
+            pointerEvents: restoreLoading ? "none" : "auto",
           }}
         >
           <div
@@ -1446,8 +1405,8 @@ const Archives = () => {
             zIndex: 10000,
             display: "flex",
             justifyContent: "center",
-            alignItems: "flex-start", // push content to the top
-            paddingTop: "150px", // adjust vertical offset from top
+            alignItems: "flex-start",
+            paddingTop: "150px",
             color: "#fff",
             fontSize: "18px",
             fontWeight: "600",

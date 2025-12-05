@@ -112,6 +112,63 @@ const Cancelled = () => {
     }))
     .filter((order) => order.items.length > 0);
 
+  // Helper: compute delivery date using cancelledAt as base
+  const formatDeliveryDate = (order) => {
+    const delivery = order.delivery;
+    if (!delivery) return "-";
+
+    const formatDate = (d) => {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    };
+
+    let baseDate = null;
+    try {
+      if (order.cancelledAt && typeof order.cancelledAt.toDate === "function") {
+        baseDate = order.cancelledAt.toDate();
+      } else if (order.createdAt && typeof order.createdAt.toDate === "function") {
+        baseDate = order.createdAt.toDate();
+      } else if (order.cancelledAt) {
+        baseDate = new Date(order.cancelledAt);
+      } else if (order.createdAt) {
+        baseDate = new Date(order.createdAt);
+      }
+    } catch (e) {
+      baseDate = null;
+    }
+
+    if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
+
+    const s = String(delivery).trim();
+
+    const rangeMatch = s.match(/(-?\d+)\s*[-–]\s*(\d+)/);
+    if (rangeMatch) {
+      const startDays = parseInt(rangeMatch[1], 10);
+      const endDays = parseInt(rangeMatch[2], 10);
+      const startDate = new Date(baseDate);
+      startDate.setDate(startDate.getDate() + startDays);
+      const endDate = new Date(baseDate);
+      endDate.setDate(endDate.getDate() + endDays);
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    }
+
+    let days = null;
+    if (!isNaN(Number(s))) {
+      days = Number(s);
+    } else {
+      const singleMatch = s.match(/(-?\d+)/);
+      if (singleMatch) days = parseInt(singleMatch[1], 10);
+    }
+
+    if (days === null) return String(delivery);
+
+    const deliveryDate = new Date(baseDate);
+    deliveryDate.setDate(deliveryDate.getDate() + days);
+    return formatDate(deliveryDate);
+  };
+
   const tabs = [
     { name: "Orders", path: "/seller/orders" },
     { name: "To Ship", path: "/seller/orders/toship" },
@@ -189,6 +246,9 @@ const Cancelled = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -215,6 +275,9 @@ const Cancelled = () => {
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
+                  </TableData>
+                  <TableData style={{ textAlign: "center" }}>
+                    {formatDeliveryDate(order)}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.quantity}

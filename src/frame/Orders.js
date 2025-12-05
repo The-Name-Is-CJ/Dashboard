@@ -1,34 +1,30 @@
-import React, { useState, useEffect } from "react";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { FiSearch } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
 import {
   OrdersContainer,
   OrdersHeader,
+  OrdersTable,
   OrdersTabs,
   TabItem,
-  OrdersTable,
-  TableHead,
-  TableRow,
-  TableHeader,
   TableData,
-  StatusButton,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "../components/orderstyle";
-import {
-  collection,
-  query,
-  onSnapshot,
-  doc,
-  deleteDoc,
-  setDoc,
-  orderBy,
-  addDoc,
-  serverTimestamp,
-  getDocs,
-  getDoc,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { db, auth } from "../firebase";
-import { FiSearch } from "react-icons/fi";
+import { auth, db } from "../firebase";
 
 const popupStyles = {
   overlay: {
@@ -296,6 +292,64 @@ const Orders = () => {
       order.orderId.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+  // Helper: compute delivery date by adding delivery-days to createdAt
+  const formatDeliveryDate = (order) => {
+    const delivery = order.delivery;
+    if (!delivery) return "-";
+    // format date as MM/DD/YYYY
+    const formatDate = (d) => {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    };
+
+    // determine base date from createdAt (handles Firestore Timestamp or Date)
+    let baseDate = null;
+    try {
+      if (order.createdAt && typeof order.createdAt.toDate === "function") {
+        baseDate = order.createdAt.toDate();
+      } else if (order.createdAt) {
+        baseDate = new Date(order.createdAt);
+      }
+    } catch (e) {
+      baseDate = null;
+    }
+
+    if (!baseDate || isNaN(baseDate.getTime())) {
+      baseDate = new Date();
+    }
+
+    const s = String(delivery).trim();
+
+    // check for a range like "1-3" or "1 - 3 days"
+    const rangeMatch = s.match(/(-?\d+)\s*[-–]\s*(\d+)/);
+    if (rangeMatch) {
+      const startDays = parseInt(rangeMatch[1], 10);
+      const endDays = parseInt(rangeMatch[2], 10);
+      const startDate = new Date(baseDate);
+      startDate.setDate(startDate.getDate() + startDays);
+      const endDate = new Date(baseDate);
+      endDate.setDate(endDate.getDate() + endDays);
+      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+    }
+
+    // not a range — try to parse a single number of days
+    let days = null;
+    if (!isNaN(Number(s))) {
+      days = Number(s);
+    } else {
+      const singleMatch = s.match(/(-?\d+)/);
+      if (singleMatch) days = parseInt(singleMatch[1], 10);
+    }
+
+    if (days === null) return String(delivery);
+
+    const deliveryDate = new Date(baseDate);
+    deliveryDate.setDate(deliveryDate.getDate() + days);
+    return formatDate(deliveryDate);
+  };
+
   const handleConfirm = async () => {
     if (loading) return;
 
@@ -494,6 +548,9 @@ const Orders = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
+            <TableHeader width="100px" style={{ textAlign: "center" }}>
+              Delivery
+            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -543,6 +600,9 @@ const Orders = () => {
                 </TableData>
                 <TableData style={{ textAlign: "center" }}>
                   {item.productName}
+                </TableData>
+                <TableData style={{ textAlign: "center" }}>
+                  {formatDeliveryDate(order)}
                 </TableData>
                 <TableData style={{ textAlign: "center" }}>
                   {item.quantity}
