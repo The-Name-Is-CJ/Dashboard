@@ -128,7 +128,10 @@ const ToReceive = () => {
     try {
       if (order.shippedAt && typeof order.shippedAt.toDate === "function") {
         baseDate = order.shippedAt.toDate();
-      } else if (order.createdAt && typeof order.createdAt.toDate === "function") {
+      } else if (
+        order.createdAt &&
+        typeof order.createdAt.toDate === "function"
+      ) {
         baseDate = order.createdAt.toDate();
       } else if (order.shippedAt) {
         baseDate = new Date(order.shippedAt);
@@ -257,7 +260,7 @@ const ToReceive = () => {
               Product
             </TableHeader>
             <TableHeader width="100px" style={{ textAlign: "center" }}>
-              Delivery
+              Receive Date
             </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity

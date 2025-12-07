@@ -140,7 +140,10 @@ const ReturnRefund = () => {
     try {
       if (order.requestDate && typeof order.requestDate.toDate === "function") {
         baseDate = order.requestDate.toDate();
-      } else if (order.createdAt && typeof order.createdAt.toDate === "function") {
+      } else if (
+        order.createdAt &&
+        typeof order.createdAt.toDate === "function"
+      ) {
         baseDate = order.createdAt.toDate();
       } else if (order.requestDate) {
         baseDate = new Date(order.requestDate);
@@ -479,7 +482,7 @@ const ReturnRefund = () => {
               Product
             </TableHeader>
             <TableHeader width="100px" style={{ textAlign: "center" }}>
-              Delivery
+              Refund Date
             </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity

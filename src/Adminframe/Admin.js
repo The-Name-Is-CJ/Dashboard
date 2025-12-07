@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../firebase";
 import { sendEmailVerification } from "firebase/auth";
 import { setDoc, doc as firestoreDoc } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 
 const Admin = () => {
   const [loading, setLoading] = useState(true);
@@ -26,7 +27,6 @@ const Admin = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    // passwords removed from UI — will be auto-generated
   });
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pendingDocId, setPendingDocId] = useState("");
@@ -44,6 +44,7 @@ const Admin = () => {
     A02: { name: "", email: "" },
     A03: { name: "", email: "" },
   });
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -185,10 +186,22 @@ const Admin = () => {
         copiedToClipboard = false;
       }
       // Show the generated password to the creating admin so they can copy/send if needed
-      alert(`✅ Admin added successfully: ${email}\n\nPassword: ${password}\n\nA verification email was ${
-        verificationSent ? "sent" : email === "admin@gmail.com" ? "skipped for this account" : "not sent (check logs)"
-      }.${copiedToClipboard ? "\n\nThe password was copied to your clipboard." : "\n\n(Unable to copy password to clipboard automatically)"}`);
+      alert(
+        `✅ Admin added successfully: ${email}\n\nPassword: ${password}\n\nA verification email was ${
+          verificationSent
+            ? "sent"
+            : email === "admin@gmail.com"
+            ? "skipped for this account"
+            : "not sent (check logs)"
+        }.${
+          copiedToClipboard
+            ? "\n\nThe password was copied to your clipboard."
+            : "\n\n(Unable to copy password to clipboard automatically)"
+        }`
+      );
       handleCloseModal();
+
+      navigate("/adminLogin");
     } catch (error) {
       console.error(error);
       alert("Failed to add admin. Check console.");
@@ -424,8 +437,15 @@ const Admin = () => {
               onFocus={() => setFocusedField("email")}
               onBlur={() => setFocusedField("")}
             />
-            <p style={{ marginTop: "0.5rem", marginBottom: "0.5rem", color: "#333" }}>
-              A password will be generated automatically and emailed to the new admin.
+            <p
+              style={{
+                marginTop: "0.5rem",
+                marginBottom: "0.5rem",
+                color: "#333",
+              }}
+            >
+              A password will be generated automatically and emailed to the new
+              admin.
             </p>
             <div
               style={{

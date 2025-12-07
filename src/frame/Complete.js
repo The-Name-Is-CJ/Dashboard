@@ -134,7 +134,10 @@ const Complete = () => {
     try {
       if (order.receivedAt && typeof order.receivedAt.toDate === "function") {
         baseDate = order.receivedAt.toDate();
-      } else if (order.createdAt && typeof order.createdAt.toDate === "function") {
+      } else if (
+        order.createdAt &&
+        typeof order.createdAt.toDate === "function"
+      ) {
         baseDate = order.createdAt.toDate();
       } else if (order.receivedAt) {
         baseDate = new Date(order.receivedAt);
@@ -261,9 +264,6 @@ const Complete = () => {
             <TableHeader width="225px" style={{ textAlign: "center" }}>
               Product
             </TableHeader>
-            <TableHeader width="100px" style={{ textAlign: "center" }}>
-              Delivery
-            </TableHeader>
             <TableHeader width="30px" style={{ textAlign: "center" }}>
               Quantity
             </TableHeader>
@@ -290,9 +290,6 @@ const Complete = () => {
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.productName}
-                  </TableData>
-                  <TableData style={{ textAlign: "center" }}>
-                    {formatDeliveryDate(order)}
                   </TableData>
                   <TableData style={{ textAlign: "center" }}>
                     {item.quantity}
