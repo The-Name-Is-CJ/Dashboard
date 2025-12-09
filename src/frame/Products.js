@@ -302,7 +302,7 @@ const Products = () => {
 
       await addDoc(collection(db, "removedProducts"), {
         ...productData,
-        originalId: deleteConfirm.id,
+        originalDocId: deleteConfirm.id,
         removedAt: serverTimestamp(),
         removedBy: user?.email ?? "Unknown user",
         role: role ?? "Unknown role",
