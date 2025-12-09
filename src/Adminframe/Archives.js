@@ -279,6 +279,8 @@ const Archives = () => {
         userIdAffected: archiveId,
       });
 
+      alert("Successfully restored!");
+
       switch (archiveCollection) {
         case "usersArchive":
           setUserArchives((prev) =>
